@@ -22,13 +22,15 @@ services:
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       ALLOW_PLAINTEXT_LISTENER: "yes"
 
-  ecommerceag2:
+  ecommerceag1:
     image: eclipse-temurin:17
-    container_name: ecommerceag2
+    container_name: ecommerceag1
     restart: unless-stopped
     working_dir: /app
     volumes:
-      - ./backend2/target/ecommerceag2-0.0.1-SNAPSHOT.jar:/app/app.jar
+      - /root/ecommerceag/backend1/target/backend1-0.0.1-SNAPSHOT.jar:/app/app.jar
     command: ["java", "-jar", "app.jar"]
     ports:
-      - "8083:8083"
+      - "8082:8082"
+    environment:
+      MERCADO_PAGO_TOKEN: ${MERCADO_PAGO_TOKEN}

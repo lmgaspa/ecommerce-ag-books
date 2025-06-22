@@ -49,10 +49,11 @@ allOpen {
 	annotation("jakarta.persistence.Embeddable")
 }
 
-tasks.withType<Test> {
-	useJUnitPlatform()
+application {
+	mainClass.set("com.luizgasparetto.backend1.Backend1ApplicationKt")
 }
 
-application {
-	mainClass.set("com.luizgasparetto.ecommerceag_backend.EcommerceBackendApplicationKt")
+tasks.withType<org.springframework.boot.gradle.tasks.bundling.BootJar> {
+	archiveFileName.set("backend1-0.0.1-SNAPSHOT.jar")
+	mainClass.set("com.luizgasparetto.backend1.Backend1ApplicationKt")
 }
