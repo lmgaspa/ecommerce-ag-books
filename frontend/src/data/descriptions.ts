@@ -1,6 +1,6 @@
 export const descriptions = {
   extase: `
-    A presente coletânea reúne crônicas de dois períodos.<br>
+    A presente coletânea reúne crônicas de dois períodos.<br><br>
     As primeiras quatro, inéditas, são de outubro e novembro de 2022;<br>
     as seguintes quatro do período entre 2000 e 2001; e a última, como publicar um livro?, do ano de 2018.<br><br>
 

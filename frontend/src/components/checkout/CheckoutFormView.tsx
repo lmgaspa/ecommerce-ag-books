@@ -44,8 +44,8 @@ const CheckoutFormView: React.FC<CheckoutFormViewProps> = ({
   handlePixCheckout,
   onNavigateBack,
 }) => (
-  <div className="max-w-5xl mx-auto py-12 px-4">
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mt-6">
+  <div className="max-w-5xl mx-auto px-4 pt-2 pb-10"> {/* reduz top padding */}
+  <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mt-0"> {/* sem margem no topo */}
       <div className="lg:col-span-2 space-y-6">
         <div className="mb-4">
           <button
