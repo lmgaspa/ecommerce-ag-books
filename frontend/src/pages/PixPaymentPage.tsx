@@ -6,7 +6,7 @@ import { calcularFreteComBaseEmCarrinho } from "../utils/freteUtils";
 
 const API_BASE =
   import.meta.env.VITE_API_BASE ??
-  "https://ecommerceag-6fa0e6a5edbf.herokuapp.com";
+  "https://ecommerceag-6fa0e6a5edbf.herokuapp.comm";
 
 function formatMMSS(totalSec: number) {
   const m = Math.floor(totalSec / 60);
@@ -124,7 +124,7 @@ export default function PixPaymentPage() {
             phone: form.phone,
             email: form.email,
             note: form.note,
-            payment: form.payment,
+            payment: "pix",             // força
             shipping: frete, // pode ser 0
             cartItems,
             total: totalProdutos,

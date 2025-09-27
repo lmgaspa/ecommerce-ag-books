@@ -1,6 +1,6 @@
 package com.luizgasparetto.backend.monolito.repositories
 
-import com.luizgasparetto.backend.monolito.models.Book
+import com.luizgasparetto.backend.monolito.models.book.Book
 import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.data.jpa.repository.Modifying
 import org.springframework.data.jpa.repository.Query

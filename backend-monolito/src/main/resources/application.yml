@@ -61,18 +61,25 @@ logging:
     org.hibernate: warn
     org.hibernate.orm.connections.pooling: warn
     com.zaxxer.hikari: warn
-    # com.luizgasparetto.backend.monolito: info   # (ligue se quiser ver logs do reaper)
+    com.luizgasparetto.backend.monolito: info   # ✅ deixe LIGADO para ver logs do fluxo
+    com.luizgasparetto.backend.monolito.services.PixWatcher: debug
+    com.luizgasparetto.backend.monolito.services.CardWatcher: debug
+    com.luizgasparetto.backend.monolito.services.PaymentProcessor: debug
 
 email:
   author: ${EMAIL_AUTHOR}
 
 efi:
   pix:
-    client_id: ${EFI_CLIENT_ID}
-    client_secret: ${EFI_CLIENT_SECRET}
+    client-id: ${EFI_CLIENT_ID}
+    client-secret: ${EFI_CLIENT_SECRET}
     chave: ${EFI_PIX_KEY}
-    cert-path: classpath:producao-811858-agenorgasparettoec.p12
-    cert-password: ""
+    cert-path: classpath:producao-agenor.p12
+    cert-password: ""          # preencha se o .p12 tiver senha
+    sandbox: false
+  card:
+    client-id: ${EFI_CARD_CLIENT_ID}
+    client-secret: ${EFI_CARD_CLIENT_SECRET}
     sandbox: false
 
 springdoc:
