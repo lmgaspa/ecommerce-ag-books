@@ -6,7 +6,7 @@ import { calcularFreteComBaseEmCarrinho } from "../utils/freteUtils";
 
 const API_BASE =
   import.meta.env.VITE_API_BASE ??
-  "https://ecommerceag-6fa0e6a5edbf.herokuapp.comm";
+  "https://ecommerceag-6fa0e6a5edbf.herokuapp.com";
 
 function formatMMSS(totalSec: number) {
   const m = Math.floor(totalSec / 60);
