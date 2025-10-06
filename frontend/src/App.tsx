@@ -16,6 +16,7 @@ import CardPaymentPage from "./pages/CardPaymentPage";
 import PixPaymentPage from "./pages/PixPaymentPage";
 import PedidoConfirmado from "./pages/PedidoConfirmado";
 import SupportPage from "./pages/SuportPage";
+import CookieConsent from "./components/CookieConsent";
 
 function ScrollToTop() {
   const location = useLocation();
@@ -32,6 +33,7 @@ function App() {
     <Router>
       <ScrollToTop />
       <Navbar />
+
       <main className="min-h-screen bg-background py-4">
         <Routes>
           <Route path="/" element={<HomePage />} />
@@ -45,7 +47,11 @@ function App() {
           <Route path="/pedido-confirmado" element={<PedidoConfirmado />} />
         </Routes>
       </main>
+
       <Footer />
+
+      {/* 👇 Banner de consentimento LGPD sempre visível no app */}
+      <CookieConsent />
     </Router>
   );
 }
