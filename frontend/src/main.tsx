@@ -6,6 +6,8 @@ import { CartProvider } from "./context/CartContext";
 
 // --- GA4 só após consentimento ---
 function loadGA() {
+  if (window.gtag) return; // evita recarregar
+
   const script1 = document.createElement("script");
   script1.async = true;
   script1.src = "https://www.googletagmanager.com/gtag/js?id=G-LZKNGE2JCM";
@@ -28,6 +30,7 @@ function hasConsent() {
   return document.cookie.includes("cookie_consent=true");
 }
 
+// ✅ Carrega GA4 apenas se o visitante já aceitou
 if (hasConsent()) {
   loadGA();
 }

@@ -24,19 +24,19 @@ export default function CookieConsent() {
   };
 
   const loadGA = () => {
-  if (window.gtag) return; // evita carregar duas vezes
+    if (window.gtag) return; // evita carregar duas vezes
 
-  const id = "G-LZKNGE2JCM"; // ✅ seu ID real do GA4
+    const id = "G-LZKNGE2JCM"; // ✅ seu ID real do GA4
 
-  // 1️⃣ Carrega o script externo do GA4
-  const script1 = document.createElement("script");
-  script1.async = true;
-  script1.src = `https://www.googletagmanager.com/gtag/js?id=${id}`;
-  document.head.appendChild(script1);
+    // 1️⃣ Carrega o script externo do GA4
+    const script1 = document.createElement("script");
+    script1.async = true;
+    script1.src = `https://www.googletagmanager.com/gtag/js?id=${id}`;
+    document.head.appendChild(script1);
 
-  // 2️⃣ Cria o script interno que inicializa o gtag()
-  const script2 = document.createElement("script");
-  script2.innerHTML = `
+    // 2️⃣ Cria o script interno que inicializa o gtag()
+    const script2 = document.createElement("script");
+    script2.innerHTML = `
     window.dataLayer = window.dataLayer || [];
     function gtag(){dataLayer.push(arguments);}
     gtag('js', new Date());
@@ -45,10 +45,10 @@ export default function CookieConsent() {
       cookie_domain: 'auto'
     });
   `;
-  document.head.appendChild(script2);
+    document.head.appendChild(script2);
 
-  console.log("✅ GA4 carregado com ID:", id);
-};
+    console.log("✅ GA4 carregado com ID:", id);
+  };
 
   // --- ações ---
   const acceptCookies = () => {
@@ -80,7 +80,8 @@ export default function CookieConsent() {
         site. Você pode aceitar ou recusar conforme a{" "}
         <span className="font-semibold">
           LGPD (Lei Geral de Proteção de Dados Pessoais)
-        </span>.
+        </span>
+        .
       </p>
 
       <div className="flex gap-3 sm:shrink-0">
