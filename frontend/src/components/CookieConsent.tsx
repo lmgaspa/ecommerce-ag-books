@@ -76,7 +76,7 @@ export default function CookieConsent() {
       aria-live="polite"
     >
       <p className="text-sm leading-relaxed sm:max-w-[70%]">
-        Usamos cookies para melhorar sua experiência e analisar o tráfego do
+        Usamos cookies para melhorar sua experiência e analisar as métricas do
         site. Você pode aceitar ou recusar conforme a{" "}
         <span className="font-semibold">
           LGPD (Lei Geral de Proteção de Dados Pessoais)
