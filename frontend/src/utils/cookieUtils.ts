@@ -43,9 +43,6 @@ export function removeCookie(key: string) {
   Cookies.remove(key);
 }
 
-/**
- * API inspirada em localStorage, mas persistindo em cookies JSON.
- */
 export const cookieStorage = {
   get<T>(key: string, fallback: T): T {
     return getCookieJSON(key, fallback);
