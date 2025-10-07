@@ -15,5 +15,5 @@ export interface CheckoutFormData {
   note: string;
   delivery: string;            // "normal" | "express" | ""
   payment: "pix" | "card";     // só a escolha aqui
-  shipping?: number;           // para o CardPaymentPage ler do localStorage
+  shipping?: number;           // para o CardPaymentPage
 }

@@ -3,6 +3,8 @@ import { useNavigate } from "react-router-dom";
 import type { CartItem } from "../context/CartTypes";
 import { formatPrice } from "../utils/formatPrice";
 import { calcularFreteComBaseEmCarrinho } from "../utils/freteUtils";
+import { cookieStorage } from "../utils/cookieUtils";
+import type { CheckoutFormData } from "../types/CheckoutTypes";
 
 const API_BASE =
   import.meta.env.VITE_API_BASE ??
@@ -17,10 +19,7 @@ function formatMMSS(totalSec: number) {
 export default function PixPaymentPage() {
   const navigate = useNavigate();
 
-  const initialCart: CartItem[] = (() => {
-    const stored = localStorage.getItem("cart");
-    return stored ? JSON.parse(stored) : [];
-  })();
+  const initialCart: CartItem[] = cookieStorage.get<CartItem[]>("cart", []);
 
   const [cartItems, setCartItems] = useState<CartItem[]>(initialCart);
   const [frete, setFrete] = useState<number | null>(null);
@@ -69,15 +68,14 @@ export default function PixPaymentPage() {
 
   useEffect(() => {
     if (cartItems.length === 0) {
-      const stored = localStorage.getItem("cart");
-      if (stored) setCartItems(JSON.parse(stored));
+      const storedCart = cookieStorage.get<CartItem[]>("cart", []);
+      if (storedCart.length > 0) setCartItems(storedCart);
     }
   }, [cartItems.length]);
 
   useEffect(() => {
-    const savedForm = localStorage.getItem("checkoutForm");
-    if (!savedForm || cartItems.length === 0) return;
-    const form = JSON.parse(savedForm);
+    const form = cookieStorage.get<CheckoutFormData | null>("checkoutForm", null);
+    if (!form || cartItems.length === 0) return;
     calcularFreteComBaseEmCarrinho({ cep: form.cep, cpf: form.cpf }, cartItems)
       .then((v) => {
         if (isMountedRef.current) setFrete(v);
@@ -96,12 +94,12 @@ export default function PixPaymentPage() {
     const run = async () => {
       if (frete === null || cartItems.length === 0 || orderId) return;
 
-      const savedForm = localStorage.getItem("checkoutForm");
+      const savedForm = cookieStorage.get<CheckoutFormData | null>("checkoutForm", null);
       if (!savedForm) {
         navigate("/checkout");
         return;
       }
-      const form = JSON.parse(savedForm);
+      const form = savedForm;
 
       setLoading(true);
       setErrorMsg(null);
@@ -224,12 +222,12 @@ export default function PixPaymentPage() {
         window.clearInterval(timerRef.current);
         timerRef.current = null;
       }
-      localStorage.removeItem("cart");
-      const nf = JSON.parse(localStorage.getItem("checkoutForm") || "{}");
-      const fn = [nf.firstName, nf.lastName].filter(Boolean).join(" ").trim();
-      navigate(
-        `/pedido-confirmado?orderId=${id}${fn ? `&name=${encodeURIComponent(fn)}` : ""}`
-      );
+      cookieStorage.remove("cart");
+      const checkoutForm = cookieStorage.get<CheckoutFormData | null>("checkoutForm", null);
+      const fullName = checkoutForm
+        ? [checkoutForm.firstName, checkoutForm.lastName].filter(Boolean).join(" ").trim()
+        : "";
+      navigate(`/pedido-confirmado?orderId=${id}${fullName ? `&name=${encodeURIComponent(fullName)}` : ""}`);
     });
 
     es.onerror = () => {

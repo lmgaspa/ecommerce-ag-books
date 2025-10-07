@@ -4,6 +4,7 @@ import CartTable from "../components/cart/CartTable";
 import CouponInput from "../components/cart/CouponInput";
 import CartSummary from "../components/cart/CartSummary";
 import { getStockByIds } from "../api/stock";
+import Cookies from "js-cookie";
 
 interface CartItem {
   id: string;
@@ -14,6 +15,9 @@ interface CartItem {
   stock?: number;
 }
 
+const COOKIE_NAME = "cart";
+const COOKIE_DAYS = 7;
+
 const CartPage = () => {
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [subtotal, setSubtotal] = useState(0);
@@ -22,8 +26,31 @@ const CartPage = () => {
   const [stockById, setStockById] = useState<Record<string, number>>({});
   const navigate = useNavigate();
 
+  // Utilidades para manipular cookies
+  const getCartFromCookies = (): CartItem[] => {
+    try {
+      const value = Cookies.get(COOKIE_NAME);
+      return value ? JSON.parse(value) : [];
+    } catch {
+      return [];
+    }
+  };
+
+  const saveCartToCookies = (items: CartItem[]) => {
+    Cookies.set(COOKIE_NAME, JSON.stringify(items), {
+      expires: COOKIE_DAYS,
+      sameSite: "Lax",
+      secure: window.location.protocol === "https:",
+    });
+  };
+
+  const clearCartCookies = () => {
+    Cookies.remove(COOKIE_NAME);
+  };
+
+  // Carrega carrinho e sincroniza com estoque
   useEffect(() => {
-    const storedCart = JSON.parse(localStorage.getItem("cart") || "[]") as CartItem[];
+    const storedCart = getCartFromCookies();
     const normalizedCart = storedCart.map((item) => {
       const rawPrice = item.price as unknown;
       const price =
@@ -39,13 +66,17 @@ const CartPage = () => {
       if (!normalizedCart.length) {
         setCartItems([]);
         setSubtotal(0);
-        localStorage.setItem("cart", "[]");
+        clearCartCookies();
         return;
       }
+
       const ids = normalizedCart.map((i) => i.id);
       const stockMap = await getStockByIds(ids);
-      const stockDict = Object.fromEntries(ids.map((id) => [id, Math.max(0, stockMap[id]?.stock ?? 0)]));
+      const stockDict = Object.fromEntries(
+        ids.map((id) => [id, Math.max(0, stockMap[id]?.stock ?? 0)])
+      );
       setStockById(stockDict);
+
       const fixed = normalizedCart
         .map((i) => {
           const s = stockDict[i.id] ?? 0;
@@ -55,10 +86,13 @@ const CartPage = () => {
         .filter((i) => i.quantity > 0);
 
       setCartItems(fixed);
-      localStorage.setItem("cart", JSON.stringify(fixed));
+      saveCartToCookies(fixed);
       calculateSubtotal(fixed);
 
-      if (fixed.length !== normalizedCart.length || JSON.stringify(fixed) !== JSON.stringify(normalizedCart)) {
+      if (
+        fixed.length !== normalizedCart.length ||
+        JSON.stringify(fixed) !== JSON.stringify(normalizedCart)
+      ) {
         alert("Atualizamos seu carrinho de acordo com o estoque atual.");
       }
     })();
@@ -85,14 +119,14 @@ const CartPage = () => {
       .filter((item): item is CartItem => item !== null);
 
     setCartItems(updatedItems);
-    localStorage.setItem("cart", JSON.stringify(updatedItems));
+    saveCartToCookies(updatedItems);
     calculateSubtotal(updatedItems);
   };
 
   const removeItem = (itemId: string) => {
     const updatedItems = cartItems.filter((item) => item.id !== itemId);
     setCartItems(updatedItems);
-    localStorage.setItem("cart", JSON.stringify(updatedItems));
+    saveCartToCookies(updatedItems);
     calculateSubtotal(updatedItems);
   };
 

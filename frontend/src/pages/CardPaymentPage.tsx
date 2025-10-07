@@ -11,6 +11,7 @@ import {
   type CardBrand,
   type InstallmentItem,
 } from "../services/efiCard";
+import { cookieStorage } from "../utils/cookieUtils";
 
 /* ===================== Tipos e helpers locais ===================== */
 
@@ -105,13 +106,7 @@ function isValidLuhn(numDigits: string): boolean {
 }
 
 function readJson<T>(key: string, fallback: T): T {
-  try {
-    const raw = localStorage.getItem(key);
-    if (!raw) return fallback;
-    return JSON.parse(raw) as T;
-  } catch {
-    return fallback;
-  }
+  return cookieStorage.get<T>(key, fallback);
 }
 
 const toYYYY = (yyOrYYYY: string) => {
@@ -332,7 +327,7 @@ export default function CardPaymentPage() {
         status?: string | null;
       } = await res.json();
 
-      localStorage.removeItem("cart");
+      cookieStorage.remove("cart");
 
       const paidStatuses = ["PAID", "APPROVED", "CAPTURED", "CONFIRMED"];
       const isPaid = data.status

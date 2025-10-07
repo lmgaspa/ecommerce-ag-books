@@ -6,6 +6,7 @@ import CheckoutForm from "./CheckoutForm";
 import type { CartItem } from "../context/CartTypes";
 import { calcularFreteComBaseEmCarrinho } from "../utils/freteUtils";
 import { getStockByIds } from "../api/stock";
+import { cookieStorage } from "../utils/cookieUtils";
 
 type FormState = {
   firstName: string;
@@ -50,25 +51,16 @@ const DEFAULT_FORM: FormState = {
 const CheckoutPage = () => {
   const navigate = useNavigate();
   const { getCart } = useCart();
-
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
-  const [totalItems, setTotalItems] = useState(0); // soma dos itens
+  const [totalItems, setTotalItems] = useState(0);
   const [shipping, setShipping] = useState(0);
   const [stockById, setStockById] = useState<Record<string, number>>({});
-
-  // Formulário com reidratação e SEM reinit ao mudar carrinho
-  const [form, setForm] = useState<FormState>(() => {
-    try {
-      const saved = localStorage.getItem("checkoutForm");
-      return saved ? { ...DEFAULT_FORM, ...JSON.parse(saved) } : DEFAULT_FORM;
-    } catch {
-      return DEFAULT_FORM;
-    }
-  });
+  const [form, setForm] = useState<FormState>(() =>
+    cookieStorage.get<FormState>("checkoutForm", DEFAULT_FORM)
+  );
 
   const onNavigateBack = () => navigate("/books");
 
-  // Carrinho + estoque (não toca no form)
   useEffect(() => {
     const cart = getCart();
     (async () => {
@@ -80,35 +72,34 @@ const CheckoutPage = () => {
       setStockById(stockDict);
 
       const fixed = cart
-        .map((i) => {
-          const s = stockDict[i.id] ?? 0;
-          const qty = Math.min(i.quantity, Math.max(0, s));
-          return { ...i, quantity: qty };
-        })
+        .map((i) => ({
+          ...i,
+          quantity: Math.min(i.quantity, Math.max(0, stockDict[i.id] ?? 0)),
+        }))
         .filter((i) => i.quantity > 0);
 
       const sum = fixed.reduce((acc, item) => acc + item.price * item.quantity, 0);
 
       setCartItems(fixed);
       setTotalItems(sum);
-      localStorage.setItem("cart", JSON.stringify(fixed));
+      cookieStorage.set("cart", fixed);
 
-      if (fixed.length !== cart.length || JSON.stringify(fixed) !== JSON.stringify(cart)) {
+      if (
+        fixed.length !== cart.length ||
+        JSON.stringify(fixed) !== JSON.stringify(cart)
+      ) {
         alert("Atualizamos seu carrinho de acordo com o estoque atual.");
       }
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Normaliza p/ frete
   const cpfCepInfo = useMemo(() => {
     const cpf = form.cpf.replace(/\D/g, "");
     const cep = form.cep.replace(/\D/g, "");
     const phone = form.phone.replace(/\D/g, "");
     return { cpf, cep, phone };
-  }, [form.cpf, form.cep, form.phone]);
+  }, [form]);
 
-  // Frete (não reseta form)
   useEffect(() => {
     if (
       cpfCepInfo.cpf === "00000000000" ||
@@ -127,54 +118,45 @@ const CheckoutPage = () => {
       .catch(() => setShipping(0));
   }, [cpfCepInfo, cartItems]);
 
-  // Persistência do form + shipping a cada alteração de qualquer campo
   useEffect(() => {
-    localStorage.setItem("checkoutForm", JSON.stringify({ ...form, shipping }));
+    cookieStorage.set("checkoutForm", { ...form, shipping });
   }, [form, shipping]);
 
-  // ++ / -- (não reinit form)
   const updateQuantity = (id: string, delta: number) => {
     const updated = cartItems
       .map((item) => {
         if (item.id !== id) return item;
         const max = stockById[id] ?? Infinity;
         const next = item.quantity + delta;
-        if (delta > 0 && next > max) {
-          alert("Quantidade solicitada excede o estoque disponível.");
+        if (next > max) {
+          alert("Quantidade excede o estoque disponível.");
           return item;
         }
         if (next <= 0) return null;
         return { ...item, quantity: next };
       })
-      .filter((it): it is CartItem => it !== null);
+      .filter(Boolean) as CartItem[];
 
     setCartItems(updated);
-    localStorage.setItem("cart", JSON.stringify(updated));
-    const sum = updated.reduce((acc, it) => acc + it.price * it.quantity, 0);
-    setTotalItems(sum);
-    if (!updated.length) setShipping(0);
+    cookieStorage.set("cart", updated);
+    setTotalItems(updated.reduce((acc, it) => acc + it.price * it.quantity, 0));
   };
 
   const removeItem = (id: string) => {
-    const updated = cartItems.filter((item) => item.id !== id);
+    const updated = cartItems.filter((i) => i.id !== id);
     setCartItems(updated);
-    localStorage.setItem("cart", JSON.stringify(updated));
-    const sum = updated.reduce((acc, it) => acc + it.price * it.quantity, 0);
-    setTotalItems(sum);
-    if (!updated.length) setShipping(0);
+    cookieStorage.set("cart", updated);
+    setTotalItems(updated.reduce((acc, it) => acc + it.price * it.quantity, 0));
   };
 
-  // Mudanças de campos (inputs/textarea) + máscaras + ViaCEP
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
   ) => {
     const { name, value: raw } = e.target;
     let value = raw;
-
     if (name === "cep") value = formatCep(value);
     if (name === "cpf") value = formatCpf(value);
     if (name === "phone") value = formatCelular(value);
-
     setForm((prev) => ({ ...prev, [name]: value }));
 
     if (name === "cep" && value.replace(/\D/g, "").length === 8) {
@@ -189,7 +171,9 @@ const CheckoutPage = () => {
             state: data.uf || "",
           }));
         })
-        .catch(() => {});
+        .catch(() => {
+          // silencioso
+        });
     }
   };
 

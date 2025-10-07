@@ -1,14 +1,15 @@
 import type { Book } from '../data/books';
 import type { CartItem } from '../context/CartTypes';
 import { parsePrice } from '../utils/parsePrice';
+import { cookieStorage } from '../utils/cookieUtils';
 
 export const useCart = () => {
   const getCart = (): CartItem[] => {
-    return JSON.parse(localStorage.getItem('cart') || '[]');
+    return cookieStorage.get<CartItem[]>('cart', []);
   };
 
   const saveCart = (items: CartItem[]) => {
-    localStorage.setItem('cart', JSON.stringify(items));
+    cookieStorage.set('cart', items);
   };
 
   const addToCart = (book: Book, quantity: number = 1) => {

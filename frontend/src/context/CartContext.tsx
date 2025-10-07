@@ -1,6 +1,7 @@
 import { createContext, useState, useEffect } from 'react';
 import type { ReactNode } from 'react';
 import type { CartItem } from './CartTypes';
+import { cookieStorage } from '../utils/cookieUtils';
 
 export interface CartContextType {
   cartItems: CartItem[];
@@ -12,13 +13,12 @@ export interface CartContextType {
 export const CartContext = createContext<CartContextType | undefined>(undefined);
 
 export const CartProvider = ({ children }: { children: ReactNode }) => {
-  const [cartItems, setCartItems] = useState<CartItem[]>(() => {
-    const stored = localStorage.getItem('cart');
-    return stored ? JSON.parse(stored) : [];
-  });
+  const [cartItems, setCartItems] = useState<CartItem[]>(() =>
+    cookieStorage.get<CartItem[]>('cart', [])
+  );
 
   useEffect(() => {
-    localStorage.setItem('cart', JSON.stringify(cartItems));
+    cookieStorage.set('cart', cartItems);
   }, [cartItems]);
 
   const addToCart = (item: CartItem) => {
