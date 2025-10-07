@@ -18,7 +18,7 @@ class PixEmailService(
     fun sendPixClientEmail(order: Order) {
         sendEmail(
             to = order.email,
-            subject = "✅ Pagamento CONFIRMED (#${order.id}) — Agenor Gasparetto - E-Commerce",
+            subject = "✅ Pagamento CONFIRMADO (#${order.id}) — Agenor Gasparetto - E-Commerce",
             html = buildHtmlMessage(order, isAuthor = false)
         )
     }
@@ -94,7 +94,7 @@ class PixEmailService(
 
         val headerClient = """
             <p style="margin:0 0 12px">Olá, <strong>${order.firstName} ${order.lastName}</strong>!</p>
-            <p style="margin:0 0 6px">🎉 <strong>Recebemos o seu pagamento via Pix.</strong> Seu pedido foi CONFIRMED.</p>
+            <p style="margin:0 0 6px">🎉 <strong>Recebemos o seu pagamento via Pix.</strong> Seu pedido foi CONFIRMADO.</p>
             <p style="margin:0 0 6px">📍 Endereço de entrega: $addressLine</p>
             $noteBlock
         """.trimIndent()
