@@ -26,7 +26,7 @@ export default function CookieConsent() {
   const loadGA = () => {
     if (window.gtag) return; // evita carregar duas vezes
 
-    const id = "G-LZKNGE2JCM"; // ✅ seu ID real do GA4
+    const id = "G-PBYHQSPV31"; // ✅ seu ID real do GA4
 
     // 1️⃣ Carrega o script externo do GA4
     const script1 = document.createElement("script");

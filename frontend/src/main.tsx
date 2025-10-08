@@ -18,7 +18,7 @@ function loadGA() {
     window.dataLayer = window.dataLayer || [];
     function gtag(){dataLayer.push(arguments);}
     gtag('js', new Date());
-    gtag('config', 'G-LZKNGE2JCM', {
+    gtag('config', 'G-PBYHQSPV31', {
       cookie_flags: 'SameSite=None;Secure',
       cookie_domain: 'auto'
     });
