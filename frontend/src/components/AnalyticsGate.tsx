@@ -76,12 +76,39 @@ export default function AnalyticsGate({
     [forcedConsent]
   );
 
-  // Carrega GA4 uma única vez quando houver consentimento
+  // Carrega GA4 quando houver consentimento
   useEffect(() => {
     if (!consentOk || loadedRef.current) return;
     loadGA4Once(String(gaId));
     loadedRef.current = true;
   }, [consentOk, gaId]);
+
+  // Reage a mudanças de consentimento em tempo real (evento custom)
+  useEffect(() => {
+    const onConsent = () => {
+      if (!loadedRef.current && hasConsent()) {
+        loadGA4Once(String(gaId));
+        loadedRef.current = true;
+      }
+    };
+    window.addEventListener("cookie-consent-changed", onConsent);
+    return () =>
+      window.removeEventListener("cookie-consent-changed", onConsent);
+  }, [gaId]);
+
+  // Fallback: reage a mudanças via localStorage (outra aba)
+  useEffect(() => {
+    const onStorage = (ev: StorageEvent) => {
+      if (ev.key === "analyticsConsent" && ev.newValue === "true") {
+        if (!loadedRef.current) {
+          loadGA4Once(String(gaId));
+          loadedRef.current = true;
+        }
+      }
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, [gaId]);
 
   // Dispara page_view em SPA (rota mudou)
   useEffect(() => {

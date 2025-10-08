@@ -1,64 +1,43 @@
+// src/components/CookieConsent.tsx
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 
 export default function CookieConsent() {
   const [visible, setVisible] = useState(false);
 
-  // --- executa na montagem ---
   useEffect(() => {
     const consent = document.cookie.includes("cookie_consent=true");
-    console.log("Cookie atual:", document.cookie, "| Consent existe?", consent);
-
-    if (consent) {
-      loadGA();
-    } else {
-      setVisible(true);
-    }
+    if (!consent) setVisible(true);
   }, []);
 
-  // --- define cookie ---
   const setCookie = (value: "true" | "false") => {
     const isLocalhost = window.location.hostname === "localhost";
-    const secure = isLocalhost ? "" : "Secure; SameSite=None;";
-    document.cookie = `cookie_consent=${value}; max-age=31536000; path=/; ${secure}`;
+    const extra = isLocalhost ? "SameSite=Lax;" : "Secure; SameSite=None;";
+    document.cookie = `cookie_consent=${value}; max-age=31536000; path=/; ${extra}`;
   };
 
-  const loadGA = () => {
-    if (window.gtag) return; // evita carregar duas vezes
-
-    const id = "G-PBYHQSPV31"; // ✅ seu ID real do GA4
-
-    // 1️⃣ Carrega o script externo do GA4
-    const script1 = document.createElement("script");
-    script1.async = true;
-    script1.src = `https://www.googletagmanager.com/gtag/js?id=${id}`;
-    document.head.appendChild(script1);
-
-    // 2️⃣ Cria o script interno que inicializa o gtag()
-    const script2 = document.createElement("script");
-    script2.innerHTML = `
-    window.dataLayer = window.dataLayer || [];
-    function gtag(){dataLayer.push(arguments);}
-    gtag('js', new Date());
-    gtag('config', '${id}', {
-      cookie_flags: 'SameSite=None;Secure',
-      cookie_domain: 'auto'
-    });
-  `;
-    document.head.appendChild(script2);
-
-    console.log("✅ GA4 carregado com ID:", id);
+  const notifyGate = (value: "true" | "false") => {
+    try {
+      localStorage.setItem("analyticsConsent", value === "true" ? "true" : "false");
+    } catch (err) {
+      // Evita falhar em navegação privada / bloqueio de storage
+      if (import.meta.env.DEV) {
+        
+        console.warn("CookieConsent: não foi possível usar localStorage.", err);
+      }
+    }
+    window.dispatchEvent(new Event("cookie-consent-changed"));
   };
 
-  // --- ações ---
   const acceptCookies = () => {
     setCookie("true");
-    loadGA();
+    notifyGate("true");
     setVisible(false);
   };
 
   const declineCookies = () => {
     setCookie("false");
+    notifyGate("false");
     setVisible(false);
   };
 
@@ -76,12 +55,8 @@ export default function CookieConsent() {
       aria-live="polite"
     >
       <p className="text-sm leading-relaxed sm:max-w-[70%]">
-        Usamos cookies para melhorar sua experiência e analisar as métricas do
-        site. Você pode aceitar ou recusar conforme a{" "}
-        <span className="font-semibold">
-          LGPD (Lei Geral de Proteção de Dados Pessoais)
-        </span>
-        .
+        Usamos cookies para melhorar sua experiência e analisar as métricas do site.
+        Você pode aceitar ou recusar conforme a <span className="font-semibold">LGPD</span>.
       </p>
 
       <div className="flex gap-3 sm:shrink-0">
