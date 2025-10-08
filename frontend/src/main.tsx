@@ -10,7 +10,7 @@ function loadGA() {
 
   const script1 = document.createElement("script");
   script1.async = true;
-  script1.src = "https://www.googletagmanager.com/gtag/js?id=G-LZKNGE2JCM";
+  script1.src = "https://www.googletagmanager.com/gtag/js?id=G-PBYHQSPV31";
   document.head.appendChild(script1);
 
   const script2 = document.createElement("script");
