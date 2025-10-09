@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+// src/pages/PixPaymentPage.tsx
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import type { CartItem } from "../context/CartTypes";
 import { formatPrice } from "../utils/formatPrice";
@@ -74,9 +75,15 @@ export default function PixPaymentPage() {
   }, [cartItems.length]);
 
   useEffect(() => {
-    const form = cookieStorage.get<CheckoutFormData | null>("checkoutForm", null);
+    const form = cookieStorage.get<CheckoutFormData | null>(
+      "checkoutForm",
+      null
+    );
     if (!form || cartItems.length === 0) return;
-    calcularFreteComBaseEmCarrinho({ cep: form.cep, cpf: form.cpf }, cartItems)
+    calcularFreteComBaseEmCarrinho(
+      { cep: form.cep, cpf: form.cpf },
+      cartItems
+    )
       .then((v) => {
         if (isMountedRef.current) setFrete(v);
       })
@@ -94,7 +101,10 @@ export default function PixPaymentPage() {
     const run = async () => {
       if (frete === null || cartItems.length === 0 || orderId) return;
 
-      const savedForm = cookieStorage.get<CheckoutFormData | null>("checkoutForm", null);
+      const savedForm = cookieStorage.get<CheckoutFormData | null>(
+        "checkoutForm",
+        null
+      );
       if (!savedForm) {
         navigate("/checkout");
         return;
@@ -122,7 +132,7 @@ export default function PixPaymentPage() {
             phone: form.phone,
             email: form.email,
             note: form.note,
-            payment: "pix",             // força
+            payment: "pix", // força
             shipping: frete, // pode ser 0
             cartItems,
             total: totalProdutos,
@@ -132,7 +142,9 @@ export default function PixPaymentPage() {
         if (!res.ok) {
           const text = await res.text();
           if (res.status === 409 || res.status === 422) {
-            setErrorMsg("Indisponível no momento. Outro cliente reservou este item.");
+            setErrorMsg(
+              "Indisponível no momento. Outro cliente reservou este item."
+            );
             setTimeout(() => navigate("/"), 2000);
             return;
           }
@@ -156,7 +168,10 @@ export default function PixPaymentPage() {
         if (data.reserveExpiresAt) {
           const t = Date.parse(data.reserveExpiresAt);
           if (!Number.isNaN(t)) expMs = t;
-        } else if (typeof data.ttlSeconds === "number" && data.ttlSeconds > 0) {
+        } else if (
+          typeof data.ttlSeconds === "number" &&
+          data.ttlSeconds > 0
+        ) {
           expMs = Date.now() + data.ttlSeconds * 1000;
         } else {
           expMs = Date.now() + 15 * 60 * 1000;
@@ -203,46 +218,65 @@ export default function PixPaymentPage() {
     };
   }, [expiresAtMs]);
 
-  const connectSSE = (id: string) => {
-    closeSSE();
-    const url = `${API_BASE}/api/orders/${id}/events`;
-    const es = new EventSource(url, { withCredentials: false });
-    sseRef.current = es;
-
-    const resetBackoff = () => {
-      backoffRef.current = 1500;
-    };
-
-    es.addEventListener("open", resetBackoff);
-    es.addEventListener("ping", () => { /* keep-alive tick */ });
-
-    es.addEventListener("paid", () => {
+  /**
+   * Conexão SSE estável (useCallback) para não quebrar o exhaustive-deps.
+   * Mantém OCP: a lógica de reconexão e side effects (limpar carrinho, navegar) ficam encapsulados.
+   */
+  const connectSSE = useCallback(
+    (id: string) => {
       closeSSE();
-      if (timerRef.current) {
-        window.clearInterval(timerRef.current);
-        timerRef.current = null;
-      }
-      cookieStorage.remove("cart");
-      const checkoutForm = cookieStorage.get<CheckoutFormData | null>("checkoutForm", null);
-      const fullName = checkoutForm
-        ? [checkoutForm.firstName, checkoutForm.lastName].filter(Boolean).join(" ").trim()
-        : "";
-      navigate(`/pedido-confirmado?orderId=${id}${fullName ? `&name=${encodeURIComponent(fullName)}` : ""}`);
-    });
+      const url = `${API_BASE}/api/orders/${id}/events`;
+      const es = new EventSource(url, { withCredentials: false });
+      sseRef.current = es;
 
-    es.onerror = () => {
-      closeSSE();
-      const wait = Math.min(backoffRef.current, 10000);
-      clearRetryTimer();
-      retryTimerRef.current = window.setTimeout(() => {
-        backoffRef.current = Math.min(backoffRef.current * 2, 10000);
-        const notExpired = expiresAtMs === null || Date.now() < expiresAtMs;
-        if (isMountedRef.current && orderId === id && notExpired) {
-          connectSSE(id);
+      const resetBackoff = () => {
+        backoffRef.current = 1500;
+      };
+
+      es.addEventListener("open", resetBackoff);
+      es.addEventListener("ping", () => {
+        // keep-alive
+      });
+
+      es.addEventListener("paid", () => {
+        closeSSE();
+        if (timerRef.current) {
+          window.clearInterval(timerRef.current);
+          timerRef.current = null;
         }
-      }, wait);
-    };
-  };
+        cookieStorage.remove("cart");
+        const checkoutForm = cookieStorage.get<CheckoutFormData | null>(
+          "checkoutForm",
+          null
+        );
+        const fullName = checkoutForm
+          ? [checkoutForm.firstName, checkoutForm.lastName]
+              .filter(Boolean)
+              .join(" ")
+              .trim()
+          : "";
+        navigate(
+          `/pedido-confirmado?orderId=${id}${
+            fullName ? `&name=${encodeURIComponent(fullName)}` : ""
+          }`
+        );
+      });
+
+      es.onerror = () => {
+        closeSSE();
+        const wait = Math.min(backoffRef.current, 10000);
+        clearRetryTimer();
+        retryTimerRef.current = window.setTimeout(() => {
+          backoffRef.current = Math.min(backoffRef.current * 2, 10000);
+          const notExpired = expiresAtMs === null || Date.now() < expiresAtMs;
+          if (isMountedRef.current && notExpired) {
+            connectSSE(id); // reabre usando o mesmo id
+          }
+        }, wait);
+      };
+    },
+    [navigate, expiresAtMs]
+  );
 
   useEffect(() => {
     if (!orderId) return;
@@ -251,8 +285,7 @@ export default function PixPaymentPage() {
       closeSSE();
       clearRetryTimer();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [orderId]);
+  }, [orderId, connectSSE]);
 
   const handleReviewClick = () => {
     navigate("/checkout");
@@ -333,7 +366,9 @@ export default function PixPaymentPage() {
                       className="flex-1 border rounded px-2 py-1 text-xs"
                     />
                     <button
-                      onClick={() => navigator.clipboard.writeText(pixCopiaECola)}
+                      onClick={() =>
+                        navigator.clipboard.writeText(pixCopiaECola)
+                      }
                       className="bg-black text-white px-3 py-1 rounded text-sm"
                     >
                       Copiar
@@ -344,7 +379,10 @@ export default function PixPaymentPage() {
               {expiresAtMs && (
                 <p className="text-sm text-gray-600 mt-2">
                   Este QR expira em{" "}
-                  <span className="font-semibold">{formatMMSS(remainingSec)}</span>.
+                  <span className="font-semibold">
+                    {formatMMSS(remainingSec)}
+                  </span>
+                  .
                 </p>
               )}
             </>
@@ -352,7 +390,8 @@ export default function PixPaymentPage() {
             <div className="p-4 border rounded bg-yellow-50 text-yellow-800 inline-block">
               <p className="font-medium">Reserva expirada</p>
               <p className="text-sm">
-                O tempo para pagamento acabou. Gere um novo pedido para tentar novamente.
+                O tempo para pagamento acabou. Gere um novo pedido para tentar
+                novamente.
               </p>
               <button
                 className="mt-3 bg-black text-white px-4 py-2 rounded"

@@ -12,6 +12,7 @@ import {
   type InstallmentItem,
 } from "../services/efiCard";
 import { cookieStorage } from "../utils/cookieUtils";
+import { analytics, mapCartItems } from "../analytics";
 
 /* ===================== Tipos e helpers locais ===================== */
 
@@ -41,9 +42,8 @@ interface CheckoutFormData {
   shipping?: number;
 }
 
-type BrandUI = CardBrand; // "visa" | "mastercard" | "amex" | "elo" | "diners"
+type BrandUI = CardBrand;
 
-// Preferir vir das envs, com fallback no seu payee_code
 const PAYEE_CODE =
   (import.meta as unknown as { env?: { VITE_EFI_PAYEE_CODE?: string } }).env?.VITE_EFI_PAYEE_CODE ??
   "cf1a4eb72fb74687e6a95a3da1bd027b";
@@ -67,7 +67,6 @@ function formatCardNumber(value: string, brand: BrandUI): string {
   }
   return digits.slice(0, 16).replace(/(\d{4})(?=\d)/g, "$1 ").trim();
 }
-
 function formatMonthStrict(value: string): string {
   let d = value.replace(/\D/g, "").slice(0, 2);
   if (d.length === 1) {
@@ -79,20 +78,15 @@ function formatMonthStrict(value: string): string {
   }
   return d;
 }
-
-// >>> Correção: NÃO faz expansão automática de "20" -> "2020" durante a digitação
 function formatYearYYYY(value: string): string {
-  return value.replace(/\D/g, "").slice(0, 4); // aceita livremente até 4 dígitos
+  return value.replace(/\D/g, "").slice(0, 4);
 }
-
 function formatCvv(value: string, brand: BrandUI): string {
   const max = brand === "amex" ? 4 : 3;
   return value.replace(/\D/g, "").slice(0, max);
 }
-
 function isValidLuhn(numDigits: string): boolean {
-  let sum = 0,
-    dbl = false;
+  let sum = 0, dbl = false;
   for (let i = numDigits.length - 1; i >= 0; i--) {
     let n = Number(numDigits[i]);
     if (dbl) {
@@ -104,11 +98,9 @@ function isValidLuhn(numDigits: string): boolean {
   }
   return sum % 10 === 0;
 }
-
 function readJson<T>(key: string, fallback: T): T {
   return cookieStorage.get<T>(key, fallback);
 }
-
 const toYYYY = (yyOrYYYY: string) => {
   const d = yyOrYYYY.replace(/\D/g, "");
   return d.length === 2 ? `20${d}` : d.slice(0, 4);
@@ -119,9 +111,9 @@ const toYYYY = (yyOrYYYY: string) => {
 interface CardData {
   number: string;
   holderName: string;
-  expirationMonth: string; // "MM"
-  expirationYear: string;  // "YYYY" (ou "YY" durante digitação; normalizamos no blur/envio)
-  cvv: string;             // 3/4
+  expirationMonth: string;
+  expirationYear: string;
+  cvv: string;
   brand: BrandUI;
 }
 
@@ -162,19 +154,15 @@ export default function CardPaymentPage() {
   const numberDigits = card.number.replace(/\D/g, "");
   const cvvLen = brand === "amex" ? 4 : 3;
 
-  // Checa bloqueio de fingerprint (opcional)
   useEffect(() => {
     (async () => {
       try {
         const blocked = await isScriptBlocked();
         if (blocked) console.warn("Fingerprint/script da Efí bloqueado por extensão!");
-      } catch {
-        // silencioso
-      }
+      } catch { /* no-op */ }
     })();
   }, []);
 
-  // Detecta bandeira real quando o número tem BIN suficiente
   useEffect(() => {
     (async () => {
       if (numberDigits.length < 6) return;
@@ -189,13 +177,10 @@ export default function CardPaymentPage() {
             cvv: formatCvv(prev.cvv, b as BrandUI),
           }));
         }
-      } catch {
-        // ignora
-      }
+      } catch { /* no-op */ }
     })();
   }, [numberDigits]);
 
-  // Carrega parcelas oficiais conforme conta/brand/total
   useEffect(() => {
     (async () => {
       try {
@@ -220,7 +205,6 @@ export default function CardPaymentPage() {
     })();
   }, [brand, total]);
 
-  // Handlers de input
   const onChangeBrand = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const newBrand = e.target.value as BrandUI;
     setBrand(newBrand);
@@ -244,7 +228,6 @@ export default function CardPaymentPage() {
   const onChangeYear = (e: React.ChangeEvent<HTMLInputElement>) => {
     setCard((prev) => ({ ...prev, expirationYear: formatYearYYYY(e.target.value) }));
   };
-  // Normaliza "YY" -> "20YY" apenas quando o campo perde foco (não trava na digitação)
   const onBlurYear = () => {
     setCard(prev => ({ ...prev, expirationYear: toYYYY(prev.expirationYear) }));
   };
@@ -253,7 +236,6 @@ export default function CardPaymentPage() {
     setCard((prev) => ({ ...prev, cvv: formatCvv(e.target.value, b) }));
   };
 
-  // Validações básicas
   const lenOk =
     (brand === "amex" && numberDigits.length === 15) ||
     (brand !== "amex" && numberDigits.length >= 14 && numberDigits.length <= 16);
@@ -263,16 +245,15 @@ export default function CardPaymentPage() {
     /^\d{2}$/.test(card.expirationMonth) &&
     Number(card.expirationMonth) >= 1 &&
     Number(card.expirationMonth) <= 12;
-  const yearOk = /^\d{4}$/.test(card.expirationYear); // YYYY obrigatório no estado final
+  const yearOk = /^\d{4}$/.test(card.expirationYear);
   const cvvOk = new RegExp(`^\\d{${cvvLen}}$`).test(card.cvv);
 
   const holderDocument = (form.cpf ?? "").replace(/\D/g, "");
-  const docOk = holderDocument.length >= 11; // regra simples p/ CPF
+  const docOk = holderDocument.length >= 11;
 
   const canPay =
     !loading && luhnOk && holderOk && monthOk && yearOk && cvvOk && docOk && total > 0;
 
-  // Valor da parcela selecionada (usa oficial quando disponível)
   const selectedInstallment = installmentOptions.find(
     (opt) => opt.installment === installments
   );
@@ -282,19 +263,29 @@ export default function CardPaymentPage() {
     return Math.round((total / installments) * 100) / 100;
   }, [selectedInstallment, installments, total]);
 
-  // Pagar
   const handlePay = async () => {
     if (!canPay) return;
     setLoading(true);
     setErrorMsg(null);
 
     try {
+      // GA4: add_payment_info (OCP)
+      try {
+        analytics.addPaymentInfo({
+          items: mapCartItems(cart),
+          value: Number(total),
+          payment_type: "credit_card",
+          installments,
+          currency: "BRL",
+        });
+      } catch { /* no-op */ }
+
       const tokenResp = await tokenize(PAYEE_CODE, EFI_ENV, {
         brand: brand as CardBrand,
         number: numberDigits,
         cvv: card.cvv,
         expirationMonth: card.expirationMonth,
-        expirationYear: toYYYY(card.expirationYear), // garante YYYY no envio
+        expirationYear: toYYYY(card.expirationYear),
         holderName: card.holderName,
         holderDocument,
         reuse: false,
@@ -334,6 +325,22 @@ export default function CardPaymentPage() {
         ? paidStatuses.includes(String(data.status).toUpperCase())
         : false;
 
+      // Se pago, envia purchase + guarda payload para dedupe
+      if (isPaid && data.orderId) {
+        const purchasePayload = {
+          transaction_id: String(data.orderId),
+          value: Number(total),
+          currency: "BRL",
+          shipping: Number(shipping || 0),
+          tax: 0,
+          items: mapCartItems(cart),
+        };
+        sessionStorage.setItem("ga_purchase_payload", JSON.stringify(purchasePayload));
+        try {
+          analytics.purchase(purchasePayload);
+        } catch { /* no-op */ }
+      }
+
       navigate(
         `/pedido-confirmado?orderId=${data.orderId}&payment=card&paid=${isPaid ? "true" : "false"}`
       );
@@ -356,7 +363,6 @@ export default function CardPaymentPage() {
         <option value="amex">American Express</option>
         <option value="elo">Elo</option>
         <option value="diners">Diners</option>
-        {/* Removido Hipercard: não consta como suportado na doc que você enviou */}
       </select>
 
       <input

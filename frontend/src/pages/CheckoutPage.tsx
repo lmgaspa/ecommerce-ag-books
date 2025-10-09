@@ -1,3 +1,4 @@
+// src/pages/CheckoutPage.tsx
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useCart } from "../hooks/useCart";
@@ -7,6 +8,7 @@ import type { CartItem } from "../context/CartTypes";
 import { calcularFreteComBaseEmCarrinho } from "../utils/freteUtils";
 import { getStockByIds } from "../api/stock";
 import { cookieStorage } from "../utils/cookieUtils";
+import { analytics, mapCartItems } from "../analytics";
 
 type FormState = {
   firstName: string;
@@ -100,6 +102,7 @@ const CheckoutPage = () => {
     return { cpf, cep, phone };
   }, [form]);
 
+  // Calcula frete e envia GA4: add_shipping_info
   useEffect(() => {
     if (
       cpfCepInfo.cpf === "00000000000" ||
@@ -114,7 +117,27 @@ const CheckoutPage = () => {
       { cpf: cpfCepInfo.cpf, cep: cpfCepInfo.cep },
       cartItems
     )
-      .then(setShipping)
+      .then((v) => {
+        setShipping(v);
+
+        // GA4: add_shipping_info (OCP)
+        try {
+          const itemsPayload = mapCartItems(cartItems);
+          const orderValue = cartItems.reduce(
+            (acc, i) => acc + i.price * i.quantity,
+            0
+          );
+          analytics.addShippingInfo({
+            items: itemsPayload,
+            value: Number(orderValue + v),
+            shipping: Number(v),
+            shipping_tier: "default",
+            currency: "BRL",
+          });
+        } catch {
+          // no-op
+        }
+      })
       .catch(() => setShipping(0));
   }, [cpfCepInfo, cartItems]);
 
