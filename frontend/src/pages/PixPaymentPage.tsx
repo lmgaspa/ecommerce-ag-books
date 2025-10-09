@@ -188,7 +188,7 @@ export default function PixPaymentPage() {
     run();
   }, [frete, cartItems, totalProdutos, navigate, orderId]);
 
-  // Contador regressivo
+  // Contador regressivo //
   useEffect(() => {
     if (!expiresAtMs) return;
     if (timerRef.current) {
