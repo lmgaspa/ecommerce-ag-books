@@ -1,7 +1,8 @@
+// src/pages/CardPaymentPage.tsx
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-// ---- Efí (via pacote NPM) ----
+// ---- Efí (via NPM package) ----
 import {
   tokenize,
   getInstallments,
@@ -13,7 +14,7 @@ import {
 import { cookieStorage } from "../utils/cookieUtils";
 import { analytics, mapCartItems } from "../analytics";
 
-/* ===================== Tipos e helpers locais ===================== */
+/* ===================== Local types & helpers ===================== */
 
 interface CartItem {
   id: string;
@@ -43,17 +44,25 @@ interface CheckoutFormData {
 
 type BrandUI = CardBrand;
 
-const PAYEE_CODE =
-  (import.meta as unknown as { env?: { VITE_EFI_PAYEE_CODE?: string } }).env?.VITE_EFI_PAYEE_CODE ??
-  "b348a05b9c0391c8097ab315eb3b4d56";
+// Read env in a way that survives Vite type narrowing during SSR/CSR builds.
+const ENV = (import.meta as unknown as { env?: Record<string, string | undefined> }).env ?? {};
 
-const EFI_ENV: "production" | "sandbox" = import.meta.env.PROD ? "production" : "sandbox";
+const PAYEE_CODE =
+  ENV.VITE_EFI_PAYEE_CODE?.trim() ||
+  "b348a05b9c0391c8097ab315eb3b4d56"; // fallback only for dev
+
+// If VITE_EFI_SANDBOX === "true" => sandbox, otherwise production.
+// Your .env has VITE_EFI_SANDBOX=false, so this becomes "production".
+const EFI_ENV: "production" | "sandbox" =
+  String(ENV.VITE_EFI_SANDBOX ?? "false").toLowerCase() === "true"
+    ? "sandbox"
+    : "production";
 
 const API_BASE =
-  ((import.meta as unknown as { env?: { VITE_API_BASE?: string } }).env?.VITE_API_BASE) ??
+  ENV.VITE_API_BASE?.replace(/\/+$/, "") ||
   "https://ecommerceag-6fa0e6a5edbf.herokuapp.com";
 
-/* ---------- Helpers de formatação ---------- */
+/* ---------- Formatting helpers ---------- */
 function formatCardNumber(value: string, brand: BrandUI): string {
   const digits = value.replace(/\D/g, "");
   if (brand === "amex") {
@@ -85,7 +94,8 @@ function formatCvv(value: string, brand: BrandUI): string {
   return value.replace(/\D/g, "").slice(0, max);
 }
 function isValidLuhn(numDigits: string): boolean {
-  let sum = 0, dbl = false;
+  let sum = 0,
+    dbl = false;
   for (let i = numDigits.length - 1; i >= 0; i--) {
     let n = Number(numDigits[i]);
     if (dbl) {
@@ -105,7 +115,7 @@ const toYYYY = (yyOrYYYY: string) => {
   return d.length === 2 ? `20${d}` : d.slice(0, 4);
 };
 
-/* ===================== Componente ===================== */
+/* ===================== Component ===================== */
 
 interface CardData {
   number: string;
@@ -129,6 +139,7 @@ export default function CardPaymentPage() {
   const subtotal = cart.reduce((acc, i) => acc + i.price * i.quantity, 0);
   const total = subtotal + shipping;
 
+  // Guard: if cart empty or total invalid, go back to checkout
   useEffect(() => {
     if (!Array.isArray(cart) || cart.length === 0 || total <= 0) {
       navigate("/checkout");
@@ -153,15 +164,19 @@ export default function CardPaymentPage() {
   const numberDigits = card.number.replace(/\D/g, "");
   const cvvLen = brand === "amex" ? 4 : 3;
 
+  // Warn if Efí fingerprint/script is blocked by extensions
   useEffect(() => {
     (async () => {
       try {
         const blocked = await isScriptBlocked();
-        if (blocked) console.warn("Fingerprint/script da Efí bloqueado por extensão!");
-      } catch { /* no-op */ }
+        if (blocked) console.warn("Efí fingerprint/script blocked by an extension!");
+      } catch {
+        /* no-op */
+      }
     })();
   }, []);
 
+  // Detect brand from card IIN
   useEffect(() => {
     (async () => {
       if (numberDigits.length < 6) return;
@@ -169,17 +184,20 @@ export default function CardPaymentPage() {
         const b = await verifyBrandFromNumber(numberDigits);
         if (b !== "unsupported" && b !== "undefined") {
           setBrand(b as CardBrand);
-          setCard(prev => ({
+          setCard((prev) => ({
             ...prev,
             brand: b as BrandUI,
             number: formatCardNumber(prev.number, b as BrandUI),
             cvv: formatCvv(prev.cvv, b as BrandUI),
           }));
         }
-      } catch { /* no-op */ }
+      } catch {
+        /* no-op */
+      }
     })();
   }, [numberDigits]);
 
+  // Fetch installments from Efí using ENV
   useEffect(() => {
     (async () => {
       try {
@@ -197,7 +215,7 @@ export default function CardPaymentPage() {
           setInstallments(1);
         }
       } catch (e) {
-        console.error("Falha ao buscar parcelas:", e);
+        console.error("Failed to fetch installments:", e);
         setInstallmentOptions([]);
         setInstallments(1);
       }
@@ -228,13 +246,14 @@ export default function CardPaymentPage() {
     setCard((prev) => ({ ...prev, expirationYear: formatYearYYYY(e.target.value) }));
   };
   const onBlurYear = () => {
-    setCard(prev => ({ ...prev, expirationYear: toYYYY(prev.expirationYear) }));
+    setCard((prev) => ({ ...prev, expirationYear: toYYYY(prev.expirationYear) }));
   };
   const onChangeCvv = (e: React.ChangeEvent<HTMLInputElement>) => {
     const b = brand;
     setCard((prev) => ({ ...prev, cvv: formatCvv(e.target.value, b) }));
   };
 
+  // Basic validations
   const lenOk =
     (brand === "amex" && numberDigits.length === 15) ||
     (brand !== "amex" && numberDigits.length >= 14 && numberDigits.length <= 16);
@@ -247,6 +266,7 @@ export default function CardPaymentPage() {
   const yearOk = /^\d{4}$/.test(card.expirationYear);
   const cvvOk = new RegExp(`^\\d{${cvvLen}}$`).test(card.cvv);
 
+  // CPF: require at least 11 digits (keeps backend as source of truth)
   const holderDocument = (form.cpf ?? "").replace(/\D/g, "");
   const docOk = holderDocument.length >= 11;
 
@@ -277,8 +297,11 @@ export default function CardPaymentPage() {
           installments,
           currency: "BRL",
         });
-      } catch { /* no-op */ }
+      } catch {
+        /* no-op */
+      }
 
+      // Tokenize with Efí using env-derived EFI_ENV and PAYEE_CODE
       const tokenResp = await tokenize(PAYEE_CODE, EFI_ENV, {
         brand: brand as CardBrand,
         number: numberDigits,
@@ -305,8 +328,9 @@ export default function CardPaymentPage() {
       });
 
       if (!res.ok) {
+        // Try to surface backend error text for observability
         const txt = await res.text();
-        throw new Error(txt || `Erro HTTP ${res.status}`);
+        throw new Error(txt || `HTTP ${res.status} while charging`);
       }
 
       const data: {
@@ -317,6 +341,7 @@ export default function CardPaymentPage() {
         status?: string | null;
       } = await res.json();
 
+      // Clear cart on success path
       cookieStorage.remove("cart");
 
       const paidStatuses = ["PAID", "APPROVED", "CAPTURED", "CONFIRMED"];
@@ -324,7 +349,7 @@ export default function CardPaymentPage() {
         ? paidStatuses.includes(String(data.status).toUpperCase())
         : false;
 
-      // Se pago, salva snapshot (quem envia é a tela de confirmação)
+      // If paid, stage purchase payload for confirmation page (to fire GA purchase once)
       if (isPaid && data.orderId) {
         const purchasePayload = {
           transaction_id: String(data.orderId),
@@ -440,11 +465,7 @@ export default function CardPaymentPage() {
         </div>
       )}
 
-      {errorMsg && (
-        <div className="bg-red-50 text-red-600 p-2 mb-4 rounded">
-          {errorMsg}
-        </div>
-      )}
+      {errorMsg && <div className="bg-red-50 text-red-600 p-2 mb-4 rounded">{errorMsg}</div>}
 
       <button
         disabled={!canPay}
