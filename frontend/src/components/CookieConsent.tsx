@@ -56,7 +56,7 @@ export default function CookieConsent() {
     >
       <p className="text-sm leading-relaxed sm:max-w-[70%]">
         Usamos cookies para melhorar sua experiência e analisar as métricas do site.
-        Você pode aceitar ou recusar conforme a <span className="font-semibold">LGPD</span>.
+        Você pode aceitar ou recusar conforme a <span className="font-semibold">LGPD - Lei Geral de Proteção de Dados Pessoais</span>.
       </p>
 
       <div className="flex gap-3 sm:shrink-0">
