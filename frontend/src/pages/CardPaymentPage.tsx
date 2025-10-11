@@ -1,4 +1,3 @@
-// src/pages/CardPaymentPage.tsx
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -325,7 +324,7 @@ export default function CardPaymentPage() {
         ? paidStatuses.includes(String(data.status).toUpperCase())
         : false;
 
-      // Se pago, envia purchase + guarda payload para dedupe
+      // Se pago, salva snapshot (quem envia é a tela de confirmação)
       if (isPaid && data.orderId) {
         const purchasePayload = {
           transaction_id: String(data.orderId),
@@ -336,9 +335,6 @@ export default function CardPaymentPage() {
           items: mapCartItems(cart),
         };
         sessionStorage.setItem("ga_purchase_payload", JSON.stringify(purchasePayload));
-        try {
-          analytics.purchase(purchasePayload);
-        } catch { /* no-op */ }
       }
 
       navigate(

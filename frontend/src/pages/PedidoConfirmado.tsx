@@ -1,3 +1,4 @@
+// src/pages/PedidoConfirmado.tsx
 import { useEffect, useMemo } from "react";
 import { useSearchParams, Link } from "react-router-dom";
 import { analytics } from "../analytics";
@@ -10,8 +11,13 @@ export default function PedidoConfirmado() {
 
   const orderId = useMemo(() => params.get("orderId"), [params]);
   const name = useMemo(() => params.get("name"), [params]);
-  const payment = useMemo(() => params.get("payment"), [params]); // "pix" | "card"
-  const paid = useMemo(() => params.get("paid") === "true", [params]); // só cartão
+
+  // Normaliza o payment para evitar erro de espaço/case
+  const paymentRaw = useMemo(() => params.get("payment") ?? "", [params]);
+  const payment = useMemo(() => paymentRaw.trim().toLowerCase(), [paymentRaw]);
+
+  const paidParam = useMemo(() => params.get("paid"), [params]);
+  const paid = useMemo(() => (paidParam ?? "").trim().toLowerCase() === "true", [paidParam]);
 
   // Dedupe e envio final de purchase (caso ainda não tenha sido enviado)
   useEffect(() => {
@@ -23,7 +29,11 @@ export default function PedidoConfirmado() {
 
     try {
       const payload = JSON.parse(raw) as PurchasePayload;
+
+      // Para cartão, só envia se estiver pago
       if (payment === "card" && !paid) return;
+
+      // Se veio orderId na URL, garanta que bate com o payload
       if (orderId && String(payload.transaction_id) !== String(orderId)) return;
 
       analytics.purchase(payload);
@@ -34,8 +44,17 @@ export default function PedidoConfirmado() {
     }
   }, [orderId, payment, paid]);
 
+  // Regras de exibição:
+  // - PIX => sempre "Pagamento confirmado"
+  // - Cartão pago => "Pagamento aprovado"
+  // - Cartão não pago => "Aguardando aprovação"
+  // - Caso sem parâmetro válido => "Pedido registrado"
+  const isPix = payment === "pix";
+  const isCard = payment === "card";
+  const isPaid = isPix || (isCard && paid);
+
   const renderMessage = () => {
-    if (payment === "pix") {
+    if (isPix) {
       return (
         <>
           <h1 className="text-2xl font-semibold mb-2">Pagamento confirmado 🎉</h1>
@@ -52,44 +71,37 @@ export default function PedidoConfirmado() {
       );
     }
 
-    if (payment === "card") {
-      if (paid) {
+    if (isCard) {
+      if (isPaid) {
         return (
           <>
             <h1 className="text-2xl font-semibold mb-2">Pagamento aprovado 🎉</h1>
             {orderId && <p className="text-gray-700">Pedido #{orderId}</p>}
             <p className="text-gray-600 mt-2">
-              Seu pagamento com cartão foi aprovado. Em breve você receberá um
-              e-mail com os detalhes.
-            </p>
-          </>
-        );
-      } else {
-        return (
-          <>
-            <h1 className="text-2xl font-semibold mb-2">
-              Aguardando aprovação do cartão ⏳
-            </h1>
-            {orderId && <p className="text-gray-700">Pedido #{orderId}</p>}
-            <p className="text-gray-600 mt-2">
-              Estamos processando o pagamento com cartão. Você receberá um
-              e-mail assim que houver atualização.
+              Seu pagamento com cartão foi aprovado. Em breve você receberá um e-mail com os detalhes.
             </p>
           </>
         );
       }
+      return (
+        <>
+          <h1 className="text-2xl font-semibold mb-2">Aguardando aprovação do cartão ⏳</h1>
+          {orderId && <p className="text-gray-700">Pedido #{orderId}</p>}
+          <p className="text-gray-600 mt-2">
+            Estamos processando o pagamento com cartão. Você receberá um e-mail assim que houver atualização.
+          </p>
+        </>
+      );
     }
 
+    // Fallback quando não veio payment ou veio inválido
     return <h1 className="text-2xl font-semibold mb-2">Pedido registrado ✅</h1>;
   };
 
   return (
     <div className="max-w-2xl mx-auto p-6 text-center">
       {renderMessage()}
-      <Link
-        to="/"
-        className="inline-block mt-6 bg-black text-white px-4 py-2 rounded"
-      >
+      <Link to="/" className="inline-block mt-6 bg-black text-white px-4 py-2 rounded">
         Voltar para a loja
       </Link>
     </div>

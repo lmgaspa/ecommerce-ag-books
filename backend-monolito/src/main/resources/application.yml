@@ -74,7 +74,7 @@ efi:
     client-id: ${EFI_CLIENT_ID}
     client-secret: ${EFI_CLIENT_SECRET}
     chave: ${EFI_PIX_KEY}
-    cert-path: classpath:producao-agenor.p12
+    cert-path: classpath:producao-ec-agenor.p12
     cert-password: ""          # preencha se o .p12 tiver senha
     sandbox: false
   card:

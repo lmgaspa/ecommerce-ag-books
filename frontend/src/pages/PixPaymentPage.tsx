@@ -1,4 +1,3 @@
-// src/pages/PixPaymentPage.tsx
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import type { CartItem } from "../context/CartTypes";
@@ -6,6 +5,7 @@ import { formatPrice } from "../utils/formatPrice";
 import { calcularFreteComBaseEmCarrinho } from "../utils/freteUtils";
 import { cookieStorage } from "../utils/cookieUtils";
 import type { CheckoutFormData } from "../types/CheckoutTypes";
+import { mapCartItems } from "../analytics";
 
 const API_BASE =
   import.meta.env.VITE_API_BASE ??
@@ -35,7 +35,7 @@ export default function PixPaymentPage() {
   const backoffRef = useRef(1500);
   const isMountedRef = useRef(true);
 
-  // Helpers para evitar try/catch vazios
+  // Helpers
   const closeSSE = () => {
     if (sseRef.current) {
       sseRef.current.close();
@@ -75,15 +75,9 @@ export default function PixPaymentPage() {
   }, [cartItems.length]);
 
   useEffect(() => {
-    const form = cookieStorage.get<CheckoutFormData | null>(
-      "checkoutForm",
-      null
-    );
+    const form = cookieStorage.get<CheckoutFormData | null>("checkoutForm", null);
     if (!form || cartItems.length === 0) return;
-    calcularFreteComBaseEmCarrinho(
-      { cep: form.cep, cpf: form.cpf },
-      cartItems
-    )
+    calcularFreteComBaseEmCarrinho({ cep: form.cep, cpf: form.cpf }, cartItems)
       .then((v) => {
         if (isMountedRef.current) setFrete(v);
       })
@@ -101,10 +95,7 @@ export default function PixPaymentPage() {
     const run = async () => {
       if (frete === null || cartItems.length === 0 || orderId) return;
 
-      const savedForm = cookieStorage.get<CheckoutFormData | null>(
-        "checkoutForm",
-        null
-      );
+      const savedForm = cookieStorage.get<CheckoutFormData | null>("checkoutForm", null);
       if (!savedForm) {
         navigate("/checkout");
         return;
@@ -132,8 +123,8 @@ export default function PixPaymentPage() {
             phone: form.phone,
             email: form.email,
             note: form.note,
-            payment: "pix", // força
-            shipping: frete, // pode ser 0
+            payment: "pix",
+            shipping: frete,
             cartItems,
             total: totalProdutos,
           }),
@@ -142,9 +133,7 @@ export default function PixPaymentPage() {
         if (!res.ok) {
           const text = await res.text();
           if (res.status === 409 || res.status === 422) {
-            setErrorMsg(
-              "Indisponível no momento. Outro cliente reservou este item."
-            );
+            setErrorMsg("Indisponível no momento. Outro cliente reservou este item.");
             setTimeout(() => navigate("/"), 2000);
             return;
           }
@@ -163,15 +152,12 @@ export default function PixPaymentPage() {
         setPixCopiaECola(data.qrCode || "");
         setOrderId(String(data.orderId || ""));
 
-        // Expiração (usa reserveExpiresAt ou ttlSeconds, fallback 15 min)
+        // Expiração
         let expMs: number | null = null;
         if (data.reserveExpiresAt) {
           const t = Date.parse(data.reserveExpiresAt);
           if (!Number.isNaN(t)) expMs = t;
-        } else if (
-          typeof data.ttlSeconds === "number" &&
-          data.ttlSeconds > 0
-        ) {
+        } else if (typeof data.ttlSeconds === "number" && data.ttlSeconds > 0) {
           expMs = Date.now() + data.ttlSeconds * 1000;
         } else {
           expMs = Date.now() + 15 * 60 * 1000;
@@ -188,7 +174,7 @@ export default function PixPaymentPage() {
     run();
   }, [frete, cartItems, totalProdutos, navigate, orderId]);
 
-  // Contador regressivo //
+  // Contador regressivo
   useEffect(() => {
     if (!expiresAtMs) return;
     if (timerRef.current) {
@@ -220,7 +206,6 @@ export default function PixPaymentPage() {
 
   /**
    * Conexão SSE estável (useCallback) para não quebrar o exhaustive-deps.
-   * Mantém OCP: a lógica de reconexão e side effects (limpar carrinho, navegar) ficam encapsulados.
    */
   const connectSSE = useCallback(
     (id: string) => {
@@ -239,26 +224,38 @@ export default function PixPaymentPage() {
       });
 
       es.addEventListener("paid", () => {
+        // Salva snapshot do purchase para a tela de confirmação disparar
+        try {
+          const itemsPayload = mapCartItems(cartItems);
+          const subtotal = cartItems.reduce((acc, i) => acc + i.price * i.quantity, 0);
+          const shippingVal = Number(frete ?? 0);
+          const payload = {
+            transaction_id: id,
+            value: Number(subtotal + shippingVal),
+            currency: "BRL",
+            shipping: shippingVal,
+            tax: 0,
+            items: itemsPayload,
+          };
+          sessionStorage.setItem("ga_purchase_payload", JSON.stringify(payload));
+        } catch {
+          /* no-op */
+        }
+
         closeSSE();
         if (timerRef.current) {
           window.clearInterval(timerRef.current);
           timerRef.current = null;
         }
         cookieStorage.remove("cart");
-        const checkoutForm = cookieStorage.get<CheckoutFormData | null>(
-          "checkoutForm",
-          null
-        );
+        const checkoutForm = cookieStorage.get<CheckoutFormData | null>("checkoutForm", null);
         const fullName = checkoutForm
-          ? [checkoutForm.firstName, checkoutForm.lastName]
-              .filter(Boolean)
-              .join(" ")
-              .trim()
+          ? [checkoutForm.firstName, checkoutForm.lastName].filter(Boolean).join(" ").trim()
           : "";
         navigate(
           `/pedido-confirmado?orderId=${id}${
             fullName ? `&name=${encodeURIComponent(fullName)}` : ""
-          }`
+          }&payment=pix&paid=true`
         );
       });
 
@@ -275,7 +272,7 @@ export default function PixPaymentPage() {
         }, wait);
       };
     },
-    [navigate, expiresAtMs]
+    [navigate, expiresAtMs, cartItems, frete]
   );
 
   useEffect(() => {
