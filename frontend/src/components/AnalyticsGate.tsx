@@ -1,3 +1,4 @@
+// src/components/AnalyticsGate.tsx
 import { useEffect, useMemo, useRef } from "react";
 import { useLocation } from "react-router-dom";
 
@@ -8,23 +9,23 @@ declare global {
   }
 }
 
-/** Lê o cookie "cookie_consent" (true/false). */
+/** Read cookie_consent cookie (true/false). */
 function hasConsent(): boolean {
   return document.cookie
     .split(";")
     .some((c) => c.trim().startsWith("cookie_consent=true"));
 }
 
-/** Injeta GA4 de forma idempotente. */
+/** Idempotently inject GA4. */
 function loadGA4Once(measurementId: string): void {
   if (!measurementId) {
-    console.info("[AnalyticsGate] VITE_GA4_ID ausente; não carregando GA.");
+    console.info("[AnalyticsGate] VITE_GA4_ID missing; GA will not load.");
     return;
   }
   if (typeof window === "undefined") return;
-  if (window.dataLayer) return; // já carregado (evita duplicidade)
+  if (window.dataLayer) return; // already loaded (avoid duplicates)
 
-  // script externo
+  // ---- external gtag script
   const s1 = document.createElement("script");
   s1.async = true;
   s1.src = `https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(
@@ -33,36 +34,53 @@ function loadGA4Once(measurementId: string): void {
   s1.setAttribute("data-analytics", "ga4");
   document.head.appendChild(s1);
 
-  // Detecta ambiente local para evitar "invalid domain" ao setar cookies do GA
-  const isLocal =
-    window.location.hostname === "localhost" ||
-    window.location.hostname === "127.0.0.1";
+  // ---- decide cookie domain
+  const host = window.location.hostname;
+  const isLocal = host === "localhost" || host === "127.0.0.1";
 
-  // bootstrap + config
+  // Use the registrable apex so cookies work on both apex and www.
+  // Adjust this to your real apex if you have a different domain.
+  const apexForAll = ".agenorgasparetto.com.br";
+
+  // If on localhost: use 'none' to avoid invalid-domain errors.
+  // If on our domain: force the apex; otherwise let GA decide with 'auto'.
+  const cookieDomain = isLocal
+    ? "none"
+    : host.endsWith("agenorgasparetto.com.br")
+    ? apexForAll
+    : "auto";
+
+  // ---- bootstrap + config
   const s2 = document.createElement("script");
   s2.setAttribute("data-analytics", "ga4-init");
   s2.innerHTML = `
     window.dataLayer = window.dataLayer || [];
     function gtag(){ dataLayer.push(arguments); }
     gtag('js', new Date());
-    // SPA: desativa page_view automático para evitar duplicidade
+
+    // SPA: disable automatic page_view to avoid duplicates
     gtag('config', '${measurementId}', {
       anonymize_ip: true,
       send_page_view: false,
-      ${isLocal ? "cookie_domain: 'none'," : ""}
+      cookie_domain: '${cookieDomain}',
+      cookie_update: true
+      // If you need cross-site/iframe support, uncomment:
+      // , cookie_flags: 'SameSite=None;Secure'
     });
   `;
   document.head.appendChild(s2);
 
-  console.info(`[AnalyticsGate] GA4 carregado (${measurementId}).`);
+  console.info(
+    `[AnalyticsGate] GA4 loaded (${measurementId}) with cookie_domain=${cookieDomain}.`
+  );
 }
 
 type AnalyticsGateProps = {
-  /** Força consentimento externamente (opcional). */
+  /** Force consent externally (optional). */
   forcedConsent?: boolean;
-  /** Envia page_view a cada navegação (SPA). Default: true */
+  /** Send page_view on each SPA navigation. Default: true */
   trackPageviews?: boolean;
-  /** ID do GA4 (fallback para VITE_GA4_ID). */
+  /** GA4 ID (fallback to VITE_GA4_ID). */
   measurementId?: string;
 };
 
@@ -72,9 +90,7 @@ export default function AnalyticsGate({
   measurementId,
 }: AnalyticsGateProps) {
   const gaId =
-    measurementId ??
-    (import.meta.env.VITE_GA4_ID as string | undefined) ??
-    "";
+    measurementId ?? ((import.meta.env.VITE_GA4_ID as string | undefined) ?? "");
 
   const location = useLocation();
   const loadedRef = useRef(false);
@@ -84,14 +100,14 @@ export default function AnalyticsGate({
     [forcedConsent]
   );
 
-  // Carrega GA4 quando houver consentimento
+  // Load GA4 when consent is granted
   useEffect(() => {
     if (!consentOk || loadedRef.current) return;
     loadGA4Once(String(gaId));
     loadedRef.current = true;
   }, [consentOk, gaId]);
 
-  // Reage a mudanças de consentimento em tempo real (evento custom)
+  // React to consent changes (custom event)
   useEffect(() => {
     const onConsent = () => {
       if (!loadedRef.current && hasConsent()) {
@@ -100,11 +116,10 @@ export default function AnalyticsGate({
       }
     };
     window.addEventListener("cookie-consent-changed", onConsent);
-    return () =>
-      window.removeEventListener("cookie-consent-changed", onConsent);
+    return () => window.removeEventListener("cookie-consent-changed", onConsent);
   }, [gaId]);
 
-  // Fallback: reage a mudanças via localStorage (outra aba)
+  // Fallback: react to localStorage changes (other tabs)
   useEffect(() => {
     const onStorage = (ev: StorageEvent) => {
       if (ev.key === "analyticsConsent" && ev.newValue === "true") {
@@ -118,12 +133,12 @@ export default function AnalyticsGate({
     return () => window.removeEventListener("storage", onStorage);
   }, [gaId]);
 
-  // Dispara page_view em SPA (rota mudou)
+  // Send page_view for SPA route changes
   useEffect(() => {
     if (!trackPageviews) return;
     if (!consentOk) return;
     const gtag = window.gtag;
-    if (!gtag) return; // ainda não carregou
+    if (!gtag) return; // not loaded yet
 
     gtag("event", "page_view", {
       page_location: window.location.href,
