@@ -3,9 +3,13 @@ package com.luizgasparetto.backend.monolito.services
 import com.luizgasparetto.backend.monolito.models.order.Order
 import com.luizgasparetto.backend.monolito.services.book.BookService
 import org.springframework.beans.factory.annotation.Value
+import org.springframework.core.io.ClassPathResource
 import org.springframework.mail.javamail.JavaMailSender
 import org.springframework.mail.javamail.MimeMessageHelper
 import org.springframework.stereotype.Service
+import java.math.BigDecimal
+import java.math.RoundingMode
+import java.time.Year
 
 @Service
 class CardEmailService(
@@ -14,6 +18,11 @@ class CardEmailService(
     @Value("\${email.author}") private val authorEmail: String
 ) {
     private val log = org.slf4j.LoggerFactory.getLogger(CardEmailService::class.java)
+
+    private companion object {
+        const val CID_LOGO = "logoAndesCore"
+        const val LOGO_PATH = "static/images/logo-andescore.jpeg"
+    }
 
     // ------ aprovado ------
     fun sendCardClientEmail(order: Order) {
@@ -49,8 +58,7 @@ class CardEmailService(
         )
     }
 
-    // ---------------- core ----------------
-
+    // ---------------- core (fechado; OCP) ----------------
     private fun sendEmail(to: String, subject: String, html: String) {
         val msg = mailSender.createMimeMessage()
         val h = MimeMessageHelper(msg, true, "UTF-8")
@@ -60,6 +68,13 @@ class CardEmailService(
         h.setSubject(subject)
         h.setText(html, true)
 
+        val logoRes = ClassPathResource(LOGO_PATH)
+        if (logoRes.exists()) {
+            h.addInline(CID_LOGO, logoRes)
+        } else {
+            log.warn("Logo não encontrada em $LOGO_PATH")
+        }
+
         try {
             mailSender.send(msg)
             log.info("MAIL enviado OK -> {}", to)
@@ -68,16 +83,16 @@ class CardEmailService(
         }
     }
 
+    // ---------------- HTML (extensível; OCP) ----------------
     private fun buildHtmlMessage(order: Order, isAuthor: Boolean, declined: Boolean): String {
         val total = "R$ %.2f".format(order.total.toDouble())
-        val shipping = if (order.shipping > java.math.BigDecimal.ZERO)
+        val shipping = if (order.shipping > BigDecimal.ZERO)
             "R$ %.2f".format(order.shipping.toDouble()) else "Grátis"
 
         val phoneDigits = onlyDigits(order.phone)
         val nationalPhone = normalizeBrPhone(phoneDigits)
         val maskedPhone = maskCelularBr(nationalPhone.ifEmpty { order.phone })
-        val waHref = if (nationalPhone.length == 11) "https://wa.me/55$nationalPhone"
-        else "https://wa.me/55$phoneDigits"
+        val waHref = if (nationalPhone.length == 11) "https://wa.me/55$nationalPhone" else "https://wa.me/55$phoneDigits"
 
         val itemsHtml = order.items.joinToString("") {
             val img = bookService.getImageUrl(it.bookId)
@@ -110,16 +125,13 @@ class CardEmailService(
             """<p style="margin:10px 0 0"><strong>📝 Observação do cliente:</strong><br>${escapeHtml(it)}</p>"""
         } ?: ""
 
-        // Parcelas (somente cartão e se aprovado)
         val installmentsInfo =
             if (!declined) {
                 val n = (order.installments ?: 1)
                 if (n > 1) {
-                    val per = order.total.divide(java.math.BigDecimal(n), 2, java.math.RoundingMode.HALF_UP)
-                    "<p style=\"margin:6px 0\"><strong>💳 Parcelado:</strong> $n× de R$ %.2f sem juros</p>".format(per.toDouble())
-                } else {
-                    "<p style=\"margin:6px 0\"><strong>💳 Pagamento à vista no cartão.</strong></p>"
-                }
+                    val per = order.total.divide(BigDecimal(n), 2, RoundingMode.HALF_UP)
+                    """<p style="margin:6px 0"><strong>💳 Parcelado:</strong> $n× de R$ ${"%.2f".format(per.toDouble())} sem juros</p>"""
+                } else """<p style="margin:6px 0"><strong>💳 Pagamento à vista no cartão.</strong></p>"""
             } else ""
 
         val headerClient = if (declined) {
@@ -162,6 +174,13 @@ class CardEmailService(
         }
 
         val who = if (isAuthor) headerAuthor else headerClient
+        val subtitle = when {
+            declined && isAuthor -> "Pedido recusado no cartão"
+            declined && !isAuthor -> "Cartão não aprovado"
+            !declined && isAuthor -> "Novo pedido pago (cartão)"
+            else -> "Cartão aprovado"
+        }
+
         val contactBlock = if (!isAuthor) """
             <p style="margin:16px 0 0;color:#555">
               Em caso de dúvida, fale com a <strong>Agenor Gasparetto - E-Commerce</strong><br>
@@ -174,10 +193,23 @@ class CardEmailService(
         <html>
         <body style="font-family:Arial,Helvetica,sans-serif;background:#f6f7f9;padding:24px">
           <div style="max-width:640px;margin:0 auto;background:#fff;border:1px solid #eee;border-radius:12px;overflow:hidden">
-            <div style="background:#0b0b0c;color:#fff;padding:16px 20px;display:flex;align-items:center;gap:10px">
-              <span style="font-size:18px">📚</span>
-              <strong style="font-size:16px">Agenor Gasparetto - E-Commerce</strong>
+
+            <!-- HEADER: logo à esquerda, título à direita e subtítulo com 6px de espaço -->
+            <div style="background:linear-gradient(135deg,#0a2239,#0e4b68);color:#fff;padding:16px 20px;">
+              <table width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse">
+                <tr>
+                  <td style="width:64px;vertical-align:middle;">
+                    <img src="cid:$CID_LOGO" alt="AndesCore Software" width="56" style="display:block;border-radius:6px;">
+                  </td>
+                  <td style="text-align:right;vertical-align:middle;">
+                    <div style="font-weight:700;font-size:18px;line-height:1;">AndesCore Software</div>
+                    <div style="height:6px;line-height:6px;font-size:0;">&nbsp;</div>
+                    <div style="opacity:.9;font-size:12px;line-height:1.2;">$subtitle</div>
+                  </td>
+                </tr>
+              </table>
             </div>
+
             <div style="padding:20px">
               $who
 
@@ -204,8 +236,15 @@ class CardEmailService(
 
               $contactBlock
             </div>
-            <div style="background:#fafafa;color:#888;padding:12px 20px;text-align:center;font-size:12px">
-              © ${java.time.Year.now()} Agenor Gasparetto - E-Commerce · Todos os direitos direitos Reservados· ✉️ <a href="mailto:luhmgasparetto@gmail.com" style="color:#888;text-decoration:none">luhmgasparetto@gmail.com</a>
+
+            <!-- FOOTER compacto com raio fino em texto (FE0E) -->
+            <div style="background:linear-gradient(135deg,#0a2239,#0e4b68);color:#fff;
+                        padding:6px 18px;text-align:center;font-size:14px;line-height:1;">
+              <span role="img" aria-label="raio"
+                    style="color:#ffd200;font-size:22px;vertical-align:middle;">&#x26A1;&#xFE0E;</span>
+              <span style="vertical-align:middle;">© ${Year.now()} · Powered by
+                <strong>Andes Core Software</strong>
+              </span>
             </div>
           </div>
         </body>
@@ -213,14 +252,16 @@ class CardEmailService(
         """.trimIndent()
     }
 
-    // Helpers (locais)
+    // ---------------- Helpers ----------------
     private fun onlyDigits(s: String): String = s.filter { it.isDigit() }
+
     private fun normalizeBrPhone(digits: String): String =
         when {
             digits.length >= 13 && digits.startsWith("55") -> digits.takeLast(11)
             digits.length >= 11 -> digits.takeLast(11)
             else -> digits
         }
+
     private fun maskCelularBr(src: String): String {
         val d = onlyDigits(src).let { normalizeBrPhone(it) }
         return when {
@@ -230,6 +271,7 @@ class CardEmailService(
             else -> "(${d.substring(0, 2)})${d.substring(2, 7)}-${d.substring(7, 11)}"
         }
     }
+
     private fun escapeHtml(s: String): String =
         s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 }

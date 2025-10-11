@@ -3,9 +3,11 @@ package com.luizgasparetto.backend.monolito.services
 import com.luizgasparetto.backend.monolito.models.order.Order
 import com.luizgasparetto.backend.monolito.services.book.BookService
 import org.springframework.beans.factory.annotation.Value
+import org.springframework.core.io.ClassPathResource
 import org.springframework.mail.javamail.JavaMailSender
 import org.springframework.mail.javamail.MimeMessageHelper
 import org.springframework.stereotype.Service
+import java.time.Year
 
 @Service
 class PixEmailService(
@@ -41,6 +43,15 @@ class PixEmailService(
         h.setTo(to)
         h.setSubject(subject)
         h.setText(html, true)
+
+        // Inline logo (não quebra se faltar)
+        val logoRes = ClassPathResource("static/images/logo-andescore.jpeg")
+        if (logoRes.exists()) {
+            // "logoAndesCore" é o CID usado no HTML
+            h.addInline("logoAndesCore", logoRes)
+        } else {
+            log.warn("Logo não encontrada em static/images/logo-andescore.jpeg")
+        }
 
         try {
             mailSender.send(msg)
@@ -112,6 +123,8 @@ class PixEmailService(
         val txidLine = """<p style="margin:6px 0"><strong>🔑 TXID Pix:</strong> ${order.txid}</p>"""
 
         val who = if (isAuthor) headerAuthor else headerClient
+        val subtitle = if (isAuthor) "Novo pedido pago" else "Pagamento confirmado"
+
         val contactBlock = if (!isAuthor) """
             <p style="margin:16px 0 0;color:#555">
               Em caso de dúvida, fale com a <strong>Agenor Gasparetto - E-Commerce</strong><br>
@@ -124,10 +137,23 @@ class PixEmailService(
         <html>
         <body style="font-family:Arial,Helvetica,sans-serif;background:#f6f7f9;padding:24px">
           <div style="max-width:640px;margin:0 auto;background:#fff;border:1px solid #eee;border-radius:12px;overflow:hidden">
-            <div style="background:#0b0b0c;color:#fff;padding:16px 20px;display:flex;align-items:center;gap:10px">
-              <span style="font-size:18px">📚</span>
-              <strong style="font-size:16px">Agenor Gasparetto - E-Commerce</strong>
+
+            <!-- HEADER: logo à esquerda, texto à direita, e subtítulo abaixo -->
+            <div style="background:linear-gradient(135deg,#0a2239,#0e4b68);color:#fff;padding:16px 20px;">
+              <table width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse">
+                <tr>
+                  <td style="width:64px;vertical-align:middle;">
+                    <img src="cid:logoAndesCore" alt="AndesCore Software" width="56" style="display:block;border-radius:6px;">
+                  </td>
+                  <td style="text-align:right;vertical-align:middle;">
+                    <div style="font-weight:700;font-size:18px;line-height:1;"><strong>AndesCore Software</strong></div>
+                    <div style="height:6px;line-height:6px;font-size:0;">&nbsp;</div>
+                    <div style="opacity:.9;font-size:12px;line-height:1.2;margin-top:4px;">$subtitle</div>
+                  </td>
+                </tr>
+              </table>
             </div>
+
             <div style="padding:20px">
               $who
 
@@ -149,8 +175,15 @@ class PixEmailService(
 
               $contactBlock
             </div>
-            <div style="background:#fafafa;color:#888;padding:12px 20px;text-align:center;font-size:12px">
-              © ${java.time.Year.now()} Agenor Gasparetto - E-Commerce · Todos os direitos Reservados· ✉️ <a href="mailto:luhmgasparetto@gmail.com" style="color:#888;text-decoration:none">luhmgasparetto@gmail.com</a>
+
+                <!-- FOOTER compacto com raio fino em texto (FE0E) -->
+                <div style="background:linear-gradient(135deg,#0a2239,#0e4b68);color:#fff;
+                padding:6px 18px;text-align:center;font-size:14px;line-height:1;">
+                <span role="img" aria-label="raio"
+                style="color:#ffd200;font-size:22px;vertical-align:middle;">&#x26A1;&#xFE0E;</span>
+                <span style="vertical-align:middle;">© ${Year.now()} · Powered by
+                <strong>Andes Core Software</strong>
+              </span>
             </div>
           </div>
         </body>
@@ -166,6 +199,7 @@ class PixEmailService(
             digits.length >= 11 -> digits.takeLast(11)
             else -> digits
         }
+
     private fun maskCelularBr(src: String): String {
         val d = onlyDigits(src).let { normalizeBrPhone(it) }
         return when {
@@ -175,6 +209,7 @@ class PixEmailService(
             else -> "(${d.substring(0, 2)})${d.substring(2, 7)}-${d.substring(7, 11)}"
         }
     }
+
     private fun escapeHtml(s: String): String =
         s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 }
