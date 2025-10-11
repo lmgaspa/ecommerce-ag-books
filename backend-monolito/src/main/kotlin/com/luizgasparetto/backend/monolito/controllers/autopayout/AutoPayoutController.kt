@@ -19,15 +19,7 @@ class AutoPayoutController(
     fun send(
         @PathVariable transferId: String,
         @RequestBody req: AutoPayoutRequest
-    ): AutoPayoutResponse {
-        val resp = service.sendAutoPayout(
-            amountBRL = req.amount,
-            favoredKeyOverride = req.favoredKey,
-            info = req.info ?: "Automatic Payout",
-            idempotencyId = transferId
-        )
-        return AutoPayoutResponse.from(resp)
-    }
+    ): AutoPayoutResponse = service.send(transferId, req)
 
     @GetMapping("/sent")
     fun listSent(
