@@ -1,4 +1,3 @@
-// src/components/CookieConsent.tsx
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 
@@ -11,7 +10,11 @@ export default function CookieConsent() {
   }, []);
 
   const setCookie = (value: "true" | "false") => {
-    const isLocalhost = window.location.hostname === "localhost";
+    const isLocalhost =
+      window.location.hostname === "localhost" ||
+      window.location.hostname === "127.0.0.1";
+    // Em localhost: SameSite=Lax (sem Secure)
+    // Em domínio/https: SameSite=None; Secure (requerido por browser)
     const extra = isLocalhost ? "SameSite=Lax;" : "Secure; SameSite=None;";
     document.cookie = `cookie_consent=${value}; max-age=31536000; path=/; ${extra}`;
   };
@@ -20,12 +23,11 @@ export default function CookieConsent() {
     try {
       localStorage.setItem("analyticsConsent", value === "true" ? "true" : "false");
     } catch (err) {
-      // Evita falhar em navegação privada / bloqueio de storage
       if (import.meta.env.DEV) {
-        
         console.warn("CookieConsent: não foi possível usar localStorage.", err);
       }
     }
+    // Sinaliza o AnalyticsGate para reagir imediatamente
     window.dispatchEvent(new Event("cookie-consent-changed"));
   };
 

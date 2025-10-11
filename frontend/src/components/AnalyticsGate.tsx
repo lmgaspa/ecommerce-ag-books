@@ -1,4 +1,3 @@
-// src/components/AnalyticsGate.tsx
 import { useEffect, useMemo, useRef } from "react";
 import { useLocation } from "react-router-dom";
 
@@ -23,7 +22,7 @@ function loadGA4Once(measurementId: string): void {
     return;
   }
   if (typeof window === "undefined") return;
-  if (window.dataLayer) return; // já carregado
+  if (window.dataLayer) return; // já carregado (evita duplicidade)
 
   // script externo
   const s1 = document.createElement("script");
@@ -34,6 +33,11 @@ function loadGA4Once(measurementId: string): void {
   s1.setAttribute("data-analytics", "ga4");
   document.head.appendChild(s1);
 
+  // Detecta ambiente local para evitar "invalid domain" ao setar cookies do GA
+  const isLocal =
+    window.location.hostname === "localhost" ||
+    window.location.hostname === "127.0.0.1";
+
   // bootstrap + config
   const s2 = document.createElement("script");
   s2.setAttribute("data-analytics", "ga4-init");
@@ -42,7 +46,11 @@ function loadGA4Once(measurementId: string): void {
     function gtag(){ dataLayer.push(arguments); }
     gtag('js', new Date());
     // SPA: desativa page_view automático para evitar duplicidade
-    gtag('config', '${measurementId}', { anonymize_ip: true, send_page_view: false });
+    gtag('config', '${measurementId}', {
+      anonymize_ip: true,
+      send_page_view: false,
+      ${isLocal ? "cookie_domain: 'none'," : ""}
+    });
   `;
   document.head.appendChild(s2);
 
