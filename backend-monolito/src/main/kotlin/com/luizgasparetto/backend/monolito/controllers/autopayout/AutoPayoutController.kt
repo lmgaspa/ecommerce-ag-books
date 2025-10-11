@@ -1,8 +1,6 @@
-// src/main/kotlin/com/luizgasparetto/backend/monolito/controllers/autopayout/AutoPayoutController.kt
 package com.luizgasparetto.backend.monolito.controllers.autopayout
 
 import com.luizgasparetto.backend.monolito.models.autopayout.request.AutoPayoutRequest
-import com.luizgasparetto.backend.monolito.models.autopayout.response.AutoPayoutResponse
 import com.luizgasparetto.backend.monolito.services.AutoPayoutService
 import com.luizgasparetto.backend.monolito.services.autopayout.SentTransfersQueryService
 import org.springframework.format.annotation.DateTimeFormat
@@ -19,7 +17,7 @@ class AutoPayoutController(
     fun send(
         @PathVariable transferId: String,
         @RequestBody req: AutoPayoutRequest
-    ): AutoPayoutResponse = service.send(transferId, req)
+    ) = service.send(transferId, req)
 
     @GetMapping("/sent")
     fun listSent(

@@ -1,4 +1,3 @@
-// src/main/kotlin/com/luizgasparetto/backend/monolito/services/autopayout/SentTransfersQueryService.kt
 package com.luizgasparetto.backend.monolito.services.autopayout
 
 import com.luizgasparetto.backend.monolito.clients.efi.EfiAutoPayoutClient
@@ -35,8 +34,6 @@ class SentTransfersQueryService(
 
         val raw: Map<String, Any> = efiAutoPayoutClient.listSent(fromIso, toIso, params)
 
-        // A Efí pode retornar a lista em diferentes chaves dependendo do endpoint/versão.
-        // Tentamos nas chaves mais comuns; se não houver, cai para lista vazia.
         @Suppress("UNCHECKED_CAST")
         val rows: List<Map<String, Any?>> =
             (raw["pix"] as? List<*>)?.filterIsInstance<Map<String, Any?>>() ?:
@@ -49,12 +46,15 @@ class SentTransfersQueryService(
             val fav = row["favorecido"] as? Map<*, *>
             val favId = fav?.get("identificacao") as? Map<*, *>
             val favBank = fav?.get("contaBanco") as? Map<*, *>
+            val pagador = row["pagador"] as? Map<*, *>
+            val payerKeyTop = row["chave"] as? String
+            val payerKeyNested = pagador?.get("chave") as? String
 
             SentTransferItem(
                 endToEndId       = row["endToEndId"] as? String,
                 sendId           = row["idEnvio"] as? String,
                 value            = (row["valor"] as? String) ?: "0.00",
-                payerKey         = row["chave"] as? String,
+                payerKey         = payerKeyTop ?: payerKeyNested,
                 status           = (row["status"] as? String) ?: "EM_PROCESSAMENTO",
                 payerInfo        = row["infoPagador"] as? String,
                 timeRequested    = (horario?.get("solicitacao") as? String)?.let { OffsetDateTime.parse(it) },

@@ -1,4 +1,3 @@
-// src/main/kotlin/com/luizgasparetto/backend/monolito/models/payout/Payout.kt
 package com.luizgasparetto.backend.monolito.models.payout
 
 import jakarta.persistence.*

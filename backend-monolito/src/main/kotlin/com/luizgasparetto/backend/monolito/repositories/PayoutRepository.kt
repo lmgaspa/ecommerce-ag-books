@@ -1,4 +1,3 @@
-// src/main/kotlin/com/luizgasparetto/backend/monolito/repositories/PayoutRepository.kt
 package com.luizgasparetto.backend.monolito.repositories
 
 import com.luizgasparetto.backend.monolito.models.payout.Payout

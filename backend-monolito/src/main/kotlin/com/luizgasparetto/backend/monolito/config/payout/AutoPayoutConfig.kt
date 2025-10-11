@@ -1,39 +1,31 @@
 package com.luizgasparetto.backend.monolito.config
 
-import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.context.properties.ConfigurationProperties
 import org.springframework.context.annotation.Configuration
+import org.springframework.boot.context.properties.NestedConfigurationProperty
+import java.math.BigDecimal
 
-/**
- * Lê propriedades com prefixo: efi.payout.pix
- * Ex.:
- *   efi:
- *     payout:
- *       pix:
- *         client-id: ...
- *         client-secret: ...
- *         chave: ...
- *         cert-path: classpath:producao-ec-agenor.p12
- *         cert-password: ""
- *         sandbox: false
- *       favored-key: ...
- */
 @Configuration
-@ConfigurationProperties(prefix = "efi.payout.pix")
+@ConfigurationProperties(prefix = "efi")
 class AutoPayoutConfig {
 
-    lateinit var clientId: String
-    lateinit var clientSecret: String
-    lateinit var chave: String
-    lateinit var certPath: String
-    var certPassword: String? = null
-    var sandbox: Boolean = false
+    @NestedConfigurationProperty
+    var pix: Pix = Pix()
 
-    /** chave destino padrão (opcional) */
-    @Value("\${efi.payout.favored-key:}")
-    var payoutFavoredKey: String? = null
+    @NestedConfigurationProperty
+    var payout: Payout = Payout()
 
-    /** helpers */
-    val pixKey: String get() = chave
-    val environment: String get() = if (sandbox) "sandbox" else "production"
+    class Pix {
+        var clientId: String = ""
+        var clientSecret: String = ""
+        var chave: String = ""          // efi.pix.chave
+        var certPath: String = ""       // efi.pix.cert-path
+        var certPassword: String = ""   // efi.pix.cert-password
+        var sandbox: Boolean = false
+    }
+
+    // AutoPayoutConfig.kt
+    class Payout {
+        var favoredKey: String? = null   // só isso aqui
+    }
 }

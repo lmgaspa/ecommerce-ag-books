@@ -91,7 +91,7 @@ efi:
     margin-percent: ${EFI_PAYOUT_MARGIN_PERCENT:0.8}  # ex.: 0.8% a MENOS para repassar
     margin-fixed: ${EFI_PAYOUT_MARGIN_FIXED:0}      # ex.: R$0,20 a MENOS (opcional)
     # mínimos
-    min-send: ${EFI_PAYOUT_MIN_SEND:1.00}      # nunca enviar menos que isso
+    min-send: ${EFI_PAYOUT_MIN_SEND:1.00}       # nunca enviar menos que isso
 
 springdoc:
   api-docs.path: /api-docs

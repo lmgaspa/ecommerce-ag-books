@@ -1,44 +1,21 @@
 package com.luizgasparetto.backend.monolito.models.autopayout.response
 
-import java.time.OffsetDateTime
-
 /**
- * Modelo normalizado do retorno do envio de Pix (repasse).
- * Baseado no exemplo oficial da Efí:
- * {
- *   "endToEndId": "...",
- *   "idEnvio": "identificadorEnvio...",
- *   "valor": "0.01",
- *   "chave": "19974764017", // pagador
- *   "status": "REALIZADO",
- *   "infoPagador": "...",
- *   "horario": {"solicitacao":"...","liquidacao":"..."},
- *   "favorecido": {
- *     "chave":"francisco@...","identificacao":{"nome":"...","cpf":"***.456.789-**"},
- *     "contaBanco":{"codigoBanco":"09089356"}
- *   }
- * }
+ * Resposta “flattened” do envio de PIX (repasse automático).
+ * Mapeia os campos relevantes retornados pela Efí.
  */
 data class AutoPayoutResponse(
     val endToEndId: String?,
-    /** idEnvio (idempotencyId) que você usou no PUT */
-    val transferId: String,
-    /** "valor" string no formato 123.45 */
-    val value: String,
-    /** chave do pagador (sua chave/conta Efí) */
-    val payerKey: String?,
-    /** "EM_PROCESSAMENTO" | "REALIZADO" | "NAO_REALIZADO" (ou outros que surgirem) */
-    val status: String,
-    val payerInfo: String?,
-    /** horario.solicitacao */
-    val requestedAt: OffsetDateTime?,
-    /** horario.liquidacao (quando houver) */
-    val settledAt: OffsetDateTime?,
-    /** chave informada do favorecido */
-    val favoredKey: String?,
-    val favoredName: String?,
-    /** cpf mascarado do favorecido (se vier) */
-    val favoredCpfMasked: String?,
-    /** ISPB do banco favorecido (contaBanco.codigoBanco) */
-    val favoredBankIspb: String?
+    val transferId: String,          // idEnvio usado (idempotência)
+    val value: String?,              // "valor" (string com 2 casas)
+    val payerKey: String?,           // chave do pagador (sua chave Efí)
+    val payerInfo: String?,          // infoPagador
+    val status: String?,             // EM_PROCESSAMENTO | REALIZADO | NAO_REALIZADO
+    val requestedAt: String?,        // horario.solicitacao
+    val settledAt: String?,          // horario.liquidacao (se houver)
+    val favoredKey: String?,         // chave do recebedor
+    val favoredName: String?,        // favorecido.identificacao.nome (se vier)
+    val favoredCpfMasked: String?,   // favorecido.identificacao.cpf (mascarado)
+    val favoredBankIspb: String?,    // favorecido.contaBanco.codigoBanco
+    val raw: Map<String, Any?>       // corpo bruto para auditoria/diagnóstico
 )

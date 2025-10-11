@@ -1,16 +1,16 @@
 package com.luizgasparetto.backend.monolito.models.autopayout.request
 
 /**
- * Pedido de repasse Pix (envio).
- *
- * @param amountBRL valor monetário no formato "123.45"
- * @param favoredKey chave Pix do recebedor (opcional; se não vier, usa ENV: efi.payout.favored-key)
- * @param message texto curto do pagador (aparece no extrato)
- * @param idempotencyId opcional; se não vier, usa o transferId da URL
+ * Request para envio de repasse via PIX (Efí) pelo endpoint:
+ * PUT /v3/gn/pix/{idEnvio}
  */
 data class AutoPayoutRequest(
+    /** Valor em BRL com 2 casas, ex.: "12.34" */
     val amountBRL: String,
+
+    /** Chave PIX do favorecido. Se nulo, usa a da ENV (efi.payout.favored-key). */
     val favoredKey: String? = null,
-    val message: String? = null,
-    val idempotencyId: String? = null
+
+    /** Texto curto que aparece no extrato do pagador */
+    val message: String? = null
 )

@@ -12,11 +12,6 @@ data class PayoutBreakdown(
 )
 
 object PayoutCalculator {
-    /**
-     * Aplica (gross) - taxas Efí - margem do lojista.
-     * feePercent/marginPercent são percentuais (ex.: 1.59 significa 1,59%).
-     * Retorna valores com 2 casas.
-     */
     fun computeNetToSend(
         gross: BigDecimal,
         cfg: BusinessPayoutConfig
@@ -24,7 +19,7 @@ object PayoutCalculator {
         val scale = 2
         val hundred = BigDecimal("100")
 
-        val feePct = cfg.feePercent.divide(hundred) // 1.59% -> 0.0159
+        val feePct = cfg.feePercent.divide(hundred)
         val marginPct = cfg.marginPercent.divide(hundred)
 
         val efiFee = gross.multiply(feePct).setScale(scale, RoundingMode.HALF_UP)
