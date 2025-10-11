@@ -62,6 +62,7 @@ logging:
     org.hibernate.orm.connections.pooling: warn
     com.zaxxer.hikari: warn
     com.luizgasparetto.backend.monolito: info   # ✅ deixe LIGADO para ver logs do fluxo
+    org.springframework.boot.context.config: debug
     com.luizgasparetto.backend.monolito.services.PixWatcher: debug
     com.luizgasparetto.backend.monolito.services.CardWatcher: debug
     com.luizgasparetto.backend.monolito.services.PaymentProcessor: debug
@@ -81,6 +82,8 @@ efi:
     client-id: ${EFI_CARD_CLIENT_ID}
     client-secret: ${EFI_CARD_CLIENT_SECRET}
     sandbox: false
+  payout:
+    favored-key: ${EFI_PAYOUT_FAVORED_KEY:}  # chave PIX do favorecido (email, CPF, CNPJ ou aleatória)
 
 springdoc:
   api-docs.path: /api-docs
