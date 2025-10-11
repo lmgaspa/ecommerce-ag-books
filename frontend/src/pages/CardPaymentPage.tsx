@@ -45,7 +45,7 @@ type BrandUI = CardBrand;
 
 const PAYEE_CODE =
   (import.meta as unknown as { env?: { VITE_EFI_PAYEE_CODE?: string } }).env?.VITE_EFI_PAYEE_CODE ??
-  "cf1a4eb72fb74687e6a95a3da1bd027b";
+  "b348a05b9c0391c8097ab315eb3b4d56";
 
 const EFI_ENV: "production" | "sandbox" = import.meta.env.PROD ? "production" : "sandbox";
 
