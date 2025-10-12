@@ -4,6 +4,7 @@ plugins {
 	id("org.springframework.boot") version "3.3.4"
 	id("io.spring.dependency-management") version "1.1.7"
 	kotlin("plugin.jpa") version "2.2.0"
+    kotlin("kapt") version "1.9.24" // opcional, só p/ config processor
 }
 
 group = "com.luizgasparetto"
@@ -47,7 +48,9 @@ dependencies {
 	testImplementation("org.springframework.boot:spring-boot-starter-test")
 	testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")
 	testRuntimeOnly("org.junit.platform:junit-platform-launcher")
-    annotationProcessor("org.springframework.boot:spring-boot-configuration-processor")
+    implementation("org.springframework.boot:spring-boot-starter-webflux") // WebClient + Reactor Netty
+    // opcional, mas ajuda no metadata do @ConfigurationProperties:
+    kapt("org.springframework.boot:spring-boot-configuration-processor")
 }
 
 kotlin {
