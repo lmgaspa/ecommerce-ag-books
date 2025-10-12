@@ -131,16 +131,17 @@ const CartPage = () => {
   };
 
   const handleApplyCoupon = () => {
-    const validCoupon = import.meta.env.VITE_COUPON_CODE || "DESCONTO10";
-    const discountRate = parseFloat(import.meta.env.VITE_COUPON_DISCOUNT || "0.1");
-    if (coupon.trim().toUpperCase() === validCoupon.toUpperCase()) {
-      const discountValue = subtotal * discountRate;
-      setDiscount(discountValue);
-      alert("Cupom aplicado com sucesso!");
-    } else {
-      alert("Cupom inválido.");
-    }
-  };
+  const validCoupon = (import.meta.env.VITE_COUPON_CODE || "DESCONTO10").toUpperCase();
+  const FIXED_DISCOUNT = Number(import.meta.env.VITE_COUPON_DISCOUNT_VALUE ?? 18); // opcional via .env
+
+  if (coupon.trim().toUpperCase() === validCoupon) {
+    const discountValue = Math.min(FIXED_DISCOUNT, Number(subtotal) || 0);
+    setDiscount(discountValue);
+    alert(`Cupom aplicado com sucesso! Desconto de R$ ${discountValue.toFixed(2)}`);
+  } else {
+    alert("Cupom inválido.");
+  }
+};
 
   const handleCheckout = () => {
     alert("Finalizando compra...");
