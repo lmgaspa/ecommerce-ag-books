@@ -1,25 +1,37 @@
 spring:
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true     # útil se já existirem tabelas
+    validate-on-migrate: true
+    clean-disabled: true          # evita "clean" acidental em prod
+
   datasource:
-    # Usa JDBC_* do Heroku se existir; senão, cai no seu DATABASE_URL
     url: ${JDBC_DATABASE_URL:${DATABASE_URL}}
     username: ${JDBC_DATABASE_USERNAME:${DB_USERNAME}}
     password: ${JDBC_DATABASE_PASSWORD:${DB_PASSWORD}}
     driver-class-name: org.postgresql.Driver
     hikari:
-    # (opcional) propriedades extras
-    # data-source-properties:
-    #   sslmode: require
+      maximum-pool-size: ${DB_POOL_MAX:10}
+      minimum-idle: ${DB_POOL_MIN:2}
+      idle-timeout: 30000
+      max-lifetime: 1800000        # 30m < 55m típicos de proxies
+      connection-timeout: 20000
+      validation-timeout: 5000
+      leak-detection-threshold: ${DB_LEAK_MS:0} # 0 = off
 
   jpa:
     hibernate:
-      ddl-auto:  update
-    open-in-view: false         # ✅ remove o warning e é mais seguro em prod
+      ddl-auto: validate           # ✅ Flyway migra; Hibernate só valida
+    open-in-view: false
     show-sql: false
     properties:
       hibernate:
         format_sql: true
         jdbc.time_zone: UTC
-        hibernate.type.json_format_mapper: jackson
+        jdbc.lob.non_contextual_creation: true
+      # Se usar a biblioteca hibernate-types do Vlad (JSONB com Jackson):
+      hibernate.types.json_format_mapper: jackson
 
   mvc:
     async:
@@ -37,13 +49,10 @@ spring:
       mail:
         smtp:
           auth: true
-          starttls:
-            enable: true
+          starttls.enable: true
 
   task:
-    scheduling:
-      pool:
-        size: 2
+    scheduling.pool.size: 2
 
 server:
   port: ${PORT:${SERVER_PORT:8080}}
@@ -51,19 +60,23 @@ server:
   compression:
     enabled: true
     mime-types: application/json, text/html, text/plain
-  # (opcional, útil no Heroku/NGINX para pegar scheme/host corretos)
   forward-headers-strategy: framework
   error:
     include-message: always
     include-binding-errors: always
+
+management:
+  endpoints.web.exposure.include: health,info,env,loggers,metrics
+  endpoint.health.probes.enabled: true
 
 logging:
   level:
     org.hibernate: warn
     org.hibernate.orm.connections.pooling: warn
     com.zaxxer.hikari: warn
-    com.luizgasparetto.backend.monolito: info   # ✅ deixe LIGADO para ver logs do fluxo
-    org.springframework.boot.context.config: debug
+    com.luizgasparetto.backend.monolito: info
+    org.springframework.boot.context.config: info
+    # ajuste seus serviços conforme necessidade:
     com.luizgasparetto.backend.monolito.services.PixWatcher: debug
     com.luizgasparetto.backend.monolito.services.CardWatcher: debug
     com.luizgasparetto.backend.monolito.services.PaymentProcessor: debug
@@ -76,41 +89,41 @@ efi:
     client-id: ${EFI_CLIENT_ID}
     client-secret: ${EFI_CLIENT_SECRET}
     chave: ${EFI_PIX_KEY}
-    cert-path: classpath:producao-ec-agenor.p12
-    cert-password: ""          # preencha se o .p12 tiver senha
-    sandbox: false
+    cert-path: ${EFI_PIX_CERT_PATH:classpath:producao-ec-agenor.p12}
+    cert-password: ${EFI_PIX_CERT_PASSWORD:}   # não deixe hardcoded
+    sandbox: ${EFI_PIX_SANDBOX:false}
   card:
     client-id: ${EFI_CARD_CLIENT_ID}
     client-secret: ${EFI_CARD_CLIENT_SECRET}
-    sandbox: false
+    sandbox: ${EFI_CARD_SANDBOX:false}
   payout:
-    favored-key: ${EFI_PAYOUT_FAVORED_KEY:}  # chave PIX do favorecido
-     # ---- tarifas Efí (estimadas/contratuais) ----
-    fee-percent: ${EFI_PAYOUT_FEE_PERCENT:0}   # ex.: 1.59
-    fee-fixed: ${EFI_PAYOUT_FEE_FIXED:0}     # ex.: 0.49
-     # ---- sua margem/segurança (desconto do repasse) ----
-    margin-percent: ${EFI_PAYOUT_MARGIN_PERCENT:0.8}  # ex.: 0.8% a MENOS para repassar
-    margin-fixed: ${EFI_PAYOUT_MARGIN_FIXED:0}      # ex.: R$0,20 a MENOS (opcional)
+    favored-key: ${EFI_PAYOUT_FAVORED_KEY:}     # opcional; se vazio, pega do autor
+    # ---- tarifas Efí (estimadas/contratuais) ----
+    fee-percent: ${EFI_PAYOUT_FEE_PERCENT:0}    # ex.: 1.59
+    fee-fixed:   ${EFI_PAYOUT_FEE_FIXED:0}      # ex.: 0.49
+    # ---- sua margem/segurança (desconto do repasse) ----
+    margin-percent: ${EFI_PAYOUT_MARGIN_PERCENT:0.8}
+    margin-fixed:   ${EFI_PAYOUT_MARGIN_FIXED:0}
     # mínimos
-    min-send: ${EFI_PAYOUT_MIN_SEND:1.00}       # nunca enviar menos que isso
-
-     # ✅ mover DELAY para DENTRO de payout
+    min-send: ${EFI_PAYOUT_MIN_SEND:1.00}
+    # janelas/tempos
     delay:
-      cardDays: 30   # D+30 para cartão
-      pixMinutes: 0  # imediato
-
-      fees:
-        includeGatewayFees: true   # descontar taxas antes de repassar
-      behavior:
-        onePayoutPerAuthorPerOrder: true
+      cardDays: ${EFI_PAYOUT_DELAY_CARD_DAYS:30}     # D+30 p/ cartão
+      pixMinutes: ${EFI_PAYOUT_DELAY_PIX_MINUTES:0}  # imediato p/ PIX
+    # políticas
+    fees:
+      includeGatewayFees: ${EFI_PAYOUT_INCLUDE_FEES:true}
+    behavior:
+      onePayoutPerAuthorPerOrder: ${EFI_PAYOUT_ONE_PER_AUTHOR:true}
 
 springdoc:
   api-docs.path: /api-docs
-  swagger-ui.path: /swagger
-  swagger-ui.display-request-duration: true
-  swagger-ui.try-it-out-enabled: true
+  swagger-ui:
+    path: /swagger
+    display-request-duration: true
+    try-it-out-enabled: true
 
 checkout:
   reserve:
-    ttl-seconds: ${CHECKOUT_RESERVE_TTL_SECONDS:300}   # 5 min
-    reaper-ms:  ${CHECKOUT_RESERVE_REAPER_MS:60000}   # 60 s
+    ttl-seconds: ${CHECKOUT_RESERVE_TTL_SECONDS:300}
+    reaper-ms: ${CHECKOUT_RESERVE_REAPER_MS:60000}
