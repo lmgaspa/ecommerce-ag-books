@@ -1,4 +1,7 @@
 spring:
+  jackson:
+    serialization:
+      WRITE_DATES_AS_TIMESTAMPS: false
   datasource:
     # Usa JDBC_* do Heroku se existir; senão, cai no seu DATABASE_URL
     url: ${JDBC_DATABASE_URL:${DATABASE_URL}}
