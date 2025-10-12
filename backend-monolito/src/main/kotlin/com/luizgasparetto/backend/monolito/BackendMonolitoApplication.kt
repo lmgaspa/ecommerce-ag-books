@@ -7,12 +7,11 @@ import org.springframework.boot.context.properties.ConfigurationPropertiesScan
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.boot.runApplication
 import org.springframework.scheduling.annotation.EnableScheduling
-import com.luizgasparetto.backend.monolito.config.EfiPayoutProps
 
 @SpringBootApplication
 @ConfigurationPropertiesScan
 @EnableScheduling
-@EnableConfigurationProperties(PixEfiProperties::class, CardEfiProperties::class, EfiPayoutProps::class)
+@EnableConfigurationProperties(PixEfiProperties::class, CardEfiProperties::class)
 class BackendMonolitoApplication
 
 fun main(args: Array<String>) {

@@ -1,7 +1,6 @@
 spring:
-  jackson:
-    serialization:
-      WRITE_DATES_AS_TIMESTAMPS: false
+  flyway:
+    baseline-on-migrate: true
   datasource:
     # Usa JDBC_* do Heroku se existir; senão, cai no seu DATABASE_URL
     url: ${JDBC_DATABASE_URL:${DATABASE_URL}}
@@ -15,13 +14,14 @@ spring:
 
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: validate
     open-in-view: false         # ✅ remove o warning e é mais seguro em prod
     show-sql: false
     properties:
       hibernate:
         format_sql: true
         jdbc.time_zone: UTC
+        hibernate.type.json_format_mapper: jackson
 
   mvc:
     async:
@@ -95,6 +95,16 @@ efi:
     margin-fixed: ${EFI_PAYOUT_MARGIN_FIXED:0}      # ex.: R$0,20 a MENOS (opcional)
     # mínimos
     min-send: ${EFI_PAYOUT_MIN_SEND:1.00}       # nunca enviar menos que isso
+
+     # ✅ mover DELAY para DENTRO de payout
+    delay:
+      cardDays: 30   # D+30 para cartão
+      pixMinutes: 0  # imediato
+
+      fees:
+        includeGatewayFees: true   # descontar taxas antes de repassar
+      behavior:
+        onePayoutPerAuthorPerOrder: true
 
 springdoc:
   api-docs.path: /api-docs
