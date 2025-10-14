@@ -1,7 +1,9 @@
+// src/main/kotlin/com/luizgasparetto/backend/monolito/controllers/card/CardEfiWebhookController.kt
 package com.luizgasparetto.backend.monolito.controllers.card
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.luizgasparetto.backend.monolito.models.webhook.WebhookEvent
+import com.luizgasparetto.backend.monolito.payments.web.PaymentTriggerService
 import com.luizgasparetto.backend.monolito.repositories.OrderRepository
 import com.luizgasparetto.backend.monolito.repositories.WebhookEventRepository
 import com.luizgasparetto.backend.monolito.services.card.CardPaymentProcessor
@@ -19,7 +21,9 @@ class CardEfiWebhookController(
     private val mapper: ObjectMapper,
     private val orders: OrderRepository,
     private val processor: CardPaymentProcessor,
-    private val webhookRepo: WebhookEventRepository
+    private val webhookRepo: WebhookEventRepository,
+    // 🔌 Injeção do orquestrador (mantém OCP; decisão de “quando” chamar fica fora do controller)
+    private val payoutTrigger: PaymentTriggerService
 ) {
     private val log = LoggerFactory.getLogger(CardEfiWebhookController::class.java)
 
@@ -83,7 +87,6 @@ class CardEfiWebhookController(
             log.info("CARD WEBHOOK: ignorado, sem status (chargeId={})", chargeId)
             return ResponseEntity.ok("ignored: no status")
         }
-
         if (order == null) {
             log.info("CARD WEBHOOK: order not found for chargeId={}, status={}", chargeId, status)
             return ResponseEntity.ok("ignored: order not found")
@@ -92,6 +95,12 @@ class CardEfiWebhookController(
         val paid = processor.isCardPaidStatus(status)
         val applied = if (paid) processor.markPaidIfNeededByChargeId(chargeId) else false
 
+        // 🕒 Política: CARTÃO D+31 — NÃO disparamos repasse aqui.
+        // Mantemos OCP: o job agendado (scheduler) é quem decide “quando” chamar o trigger.
+        // Se você já tem um scheduler lendo pedidos pagos por cartão e chamando:
+        // payoutTrigger.tryTriggerByRef(order.id.toString(), chargeId, "CARD-SCHEDULED")
+        // ele respeitará a janela de atraso definida por você.
+        // Aqui apenas registramos.
         log.info(
             "CARD WEBHOOK: chargeId={}, status={}, paidLike={}, applied={}, orderId={}",
             chargeId, status, paid, applied, order.id

@@ -2,33 +2,33 @@ package com.luizgasparetto.backend.monolito.services
 
 import com.luizgasparetto.backend.monolito.models.order.Order
 import com.luizgasparetto.backend.monolito.services.book.BookService
+import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
-import org.springframework.core.io.ClassPathResource
 import org.springframework.mail.javamail.JavaMailSender
 import org.springframework.mail.javamail.MimeMessageHelper
 import org.springframework.stereotype.Service
 import java.math.BigDecimal
 import java.math.RoundingMode
+import java.nio.charset.StandardCharsets
 import java.time.Year
 
 @Service
 class CardEmailService(
     private val mailSender: JavaMailSender,
     private val bookService: BookService,
-    @Value("\${email.author}") private val authorEmail: String
+    @Value("\${email.author}") private val authorEmail: String,
+    @Value("\${application.brand.name:Agenor Gasparetto - E-Commerce}") private val brandName: String,
+    @Value("\${mail.from:}") private val configuredFrom: String,
+    // **Base Welcome (modelo 1): usar logo externo para não gerar anexo**
+    @Value("\${mail.logo.url:https://andescore-landingpage.vercel.app/AndesCore.jpg}") private val logoUrl: String
 ) {
-    private val log = org.slf4j.LoggerFactory.getLogger(CardEmailService::class.java)
-
-    private companion object {
-        const val CID_LOGO = "logoAndesCore"
-        const val LOGO_PATH = "static/images/logo-andescore.jpeg"
-    }
+    private val log = LoggerFactory.getLogger(CardEmailService::class.java)
 
     // ------ aprovado ------
     fun sendCardClientEmail(order: Order) {
         sendEmail(
             to = order.email,
-            subject = "✅ Cartão aprovado (#${order.id}) — Agenor Gasparetto - E-Commerce",
+            subject = "✅ Cartão aprovado (#${order.id}) — $brandName",
             html = buildHtmlMessage(order, isAuthor = false, declined = false)
         )
     }
@@ -36,7 +36,7 @@ class CardEmailService(
     fun sendCardAuthorEmail(order: Order) {
         sendEmail(
             to = authorEmail,
-            subject = "📦 Novo pedido pago (cartão) (#${order.id}) — Agenor Gasparetto - E-Commerce",
+            subject = "📦 Novo pedido pago (cartão) (#${order.id}) — $brandName",
             html = buildHtmlMessage(order, isAuthor = true, declined = false)
         )
     }
@@ -45,7 +45,7 @@ class CardEmailService(
     fun sendClientCardDeclined(order: Order) {
         sendEmail(
             to = order.email,
-            subject = "❌ Cartão não aprovado (#${order.id}) — Agenor Gasparetto - E-Commerce",
+            subject = "❌ Cartão não aprovado (#${order.id}) — $brandName",
             html = buildHtmlMessage(order, isAuthor = false, declined = true)
         )
     }
@@ -53,27 +53,21 @@ class CardEmailService(
     fun sendAuthorCardDeclined(order: Order) {
         sendEmail(
             to = authorEmail,
-            subject = "⚠️ Pedido recusado no cartão (#${order.id}) — Agenor Gasparetto - E-Commerce",
+            subject = "⚠️ Pedido recusado no cartão (#${order.id}) — $brandName",
             html = buildHtmlMessage(order, isAuthor = true, declined = true)
         )
     }
 
-    // ---------------- core (fechado; OCP) ----------------
+    // ---------------- core (sem anexos; modelo 1) ----------------
     private fun sendEmail(to: String, subject: String, html: String) {
         val msg = mailSender.createMimeMessage()
-        val h = MimeMessageHelper(msg, true, "UTF-8")
-        val from = System.getenv("MAIL_USERNAME") ?: authorEmail
-        h.setFrom(from)
+        // multipart = false -> evita partes anexas; tudo inline no corpo
+        val h = MimeMessageHelper(msg, /* multipart = */ false, StandardCharsets.UTF_8.name())
+        val from = (System.getenv("MAIL_USERNAME") ?: configuredFrom).ifBlank { authorEmail }
+        h.setFrom(from, brandName)
         h.setTo(to)
         h.setSubject(subject)
         h.setText(html, true)
-
-        val logoRes = ClassPathResource(LOGO_PATH)
-        if (logoRes.exists()) {
-            h.addInline(CID_LOGO, logoRes)
-        } else {
-            log.warn("Logo não encontrada em $LOGO_PATH")
-        }
 
         try {
             mailSender.send(msg)
@@ -101,9 +95,9 @@ class CardEmailService(
               <td style="padding:12px 0;border-bottom:1px solid #eee;">
                 <table cellpadding="0" cellspacing="0" style="border-collapse:collapse">
                   <tr>
-                    <td><img src="$img" alt="${it.title}" width="70" style="border-radius:8px;vertical-align:middle;margin-right:12px"></td>
+                    <td><img src="$img" alt="${escapeHtml(it.title)}" width="70" style="border-radius:8px;vertical-align:middle;margin-right:12px"></td>
                     <td style="padding-left:12px">
-                      <div style="font-weight:600">${it.title}</div>
+                      <div style="font-weight:600">${escapeHtml(it.title)}</div>
                       <div style="color:#555;font-size:12px">${it.quantity}× — R$ ${"%.2f".format(it.price.toDouble())}</div>
                     </td>
                   </tr>
@@ -114,11 +108,11 @@ class CardEmailService(
         }
 
         val addressLine = buildString {
-            append(order.address)
-            if (order.number.isNotBlank()) append(", nº ").append(order.number)
-            order.complement?.takeIf { it.isNotBlank() }?.let { append(" – ").append(it) }
-            if (order.district.isNotBlank()) append(" – ").append(order.district)
-            append(", ${order.city} - ${order.state}, CEP ${order.cep}")
+            append(escapeHtml(order.address))
+            if (order.number.isNotBlank()) append(", nº ").append(escapeHtml(order.number))
+            order.complement?.takeIf { it.isNotBlank() }?.let { append(" – ").append(escapeHtml(it)) }
+            if (order.district.isNotBlank()) append(" – ").append(escapeHtml(order.district))
+            append(", ${escapeHtml(order.city)} - ${escapeHtml(order.state)}, CEP ${escapeHtml(order.cep)}")
         }
 
         val noteBlock = order.note?.takeIf { it.isNotBlank() }?.let {
@@ -136,7 +130,7 @@ class CardEmailService(
 
         val headerClient = if (declined) {
             """
-            <p style="margin:0 0 12px">Olá, <strong>${order.firstName} ${order.lastName}</strong>.</p>
+            <p style="margin:0 0 12px">Olá, <strong>${escapeHtml(order.firstName)} ${escapeHtml(order.lastName)}</strong>.</p>
             <p style="margin:0 0 6px">❌ <strong>Seu pagamento no cartão foi recusado.</strong></p>
             <p style="margin:0 0 6px">Tente novamente com outro cartão, confirme dados/limite ou opte por Pix.</p>
             <p style="margin:0 0 6px">📍 Endereço de entrega: $addressLine</p>
@@ -144,7 +138,7 @@ class CardEmailService(
             """.trimIndent()
         } else {
             """
-            <p style="margin:0 0 12px">Olá, <strong>${order.firstName} ${order.lastName}</strong>!</p>
+            <p style="margin:0 0 12px">Olá, <strong>${escapeHtml(order.firstName)} ${escapeHtml(order.lastName)}</strong>!</p>
             <p style="margin:0 0 6px">🎉 <strong>Recebemos o seu pagamento no cartão.</strong> Seu pedido foi CONFIRMADO.</p>
             <p style="margin:0 0 6px">📍 Endereço de entrega: $addressLine</p>
             $noteBlock
@@ -154,8 +148,8 @@ class CardEmailService(
         val headerAuthor = if (declined) {
             """
             <p style="margin:0 0 10px"><strong>⚠️ Pedido recusado no cartão</strong>.</p>
-            <p style="margin:0 0 4px">👤 Cliente: ${order.firstName} ${order.lastName}</p>
-            <p style="margin:0 0 4px">✉️ Email: ${order.email}</p>
+            <p style="margin:0 0 4px">👤 Cliente: ${escapeHtml(order.firstName)} ${escapeHtml(order.lastName)}</p>
+            <p style="margin:0 0 4px">✉️ Email: ${escapeHtml(order.email)}</p>
             <p style="margin:0 0 4px">📱 WhatsApp (cliente): <a href="$waHref">$maskedPhone</a></p>
             <p style="margin:0 0 4px">📍 Endereço: $addressLine</p>
             <p style="margin:0 0 4px">💳 Método: Cartão de crédito (recusado)</p>
@@ -164,8 +158,8 @@ class CardEmailService(
         } else {
             """
             <p style="margin:0 0 10px"><strong>📦 Novo pedido pago</strong> no site.</p>
-            <p style="margin:0 0 4px">👤 Cliente: ${order.firstName} ${order.lastName}</p>
-            <p style="margin:0 0 4px">✉️ Email: ${order.email}</p>
+            <p style="margin:0 0 4px">👤 Cliente: ${escapeHtml(order.firstName)} ${escapeHtml(order.lastName)}</p>
+            <p style="margin:0 0 4px">✉️ Email: ${escapeHtml(order.email)}</p>
             <p style="margin:0 0 4px">📱 WhatsApp (cliente): <a href="$waHref">$maskedPhone</a></p>
             <p style="margin:0 0 4px">📍 Endereço: $addressLine</p>
             <p style="margin:0 0 4px">💳 Método: Cartão de crédito</p>
@@ -183,7 +177,7 @@ class CardEmailService(
 
         val contactBlock = if (!isAuthor) """
             <p style="margin:16px 0 0;color:#555">
-              Em caso de dúvida, fale com a <strong>Agenor Gasparetto - E-Commerce</strong><br>
+              Em caso de dúvida, fale com a <strong>$brandName</strong><br>
               ✉️ Email: <a href="mailto:ag1957@gmail.com">ag1957@gmail.com</a> · 
               💬 WhatsApp: <a href="https://wa.me/5571994105740">(71) 99410-5740</a>
             </p>
@@ -194,15 +188,15 @@ class CardEmailService(
         <body style="font-family:Arial,Helvetica,sans-serif;background:#f6f7f9;padding:24px">
           <div style="max-width:640px;margin:0 auto;background:#fff;border:1px solid #eee;border-radius:12px;overflow:hidden">
 
-            <!-- HEADER: logo à esquerda, título à direita e subtítulo com 6px de espaço -->
+            <!-- HEADER (modelo 1: logo por URL externa) -->
             <div style="background:linear-gradient(135deg,#0a2239,#0e4b68);color:#fff;padding:16px 20px;">
               <table width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse">
                 <tr>
                   <td style="width:64px;vertical-align:middle;">
-                    <img src="cid:$CID_LOGO" alt="AndesCore Software" width="56" style="display:block;border-radius:6px;">
+                    <img src="$logoUrl" alt="${escapeHtml(brandName)}" width="56" style="display:block;border-radius:6px;">
                   </td>
                   <td style="text-align:right;vertical-align:middle;">
-                    <div style="font-weight:700;font-size:18px;line-height:1;">AndesCore Software</div>
+                    <div style="font-weight:700;font-size:18px;line-height:1;">${escapeHtml(brandName)}</div>
                     <div style="height:6px;line-height:6px;font-size:0;">&nbsp;</div>
                     <div style="opacity:.9;font-size:12px;line-height:1.2;">$subtitle</div>
                   </td>
@@ -213,7 +207,7 @@ class CardEmailService(
             <div style="padding:20px">
               $who
 
-              <p style="margin:12px 0 8px"><strong>🧾 Nº do pedido:</strong> #${order.id}</p>
+              <p style="margin:12px 0 8px"><strong>🧾 Nº do pedido:</strong> #${escapeHtml(order.id.toString())}</p>
 
               ${if (!declined) """
               <h3 style="font-size:15px;margin:16px 0 8px">🛒 Itens</h3>
@@ -237,13 +231,13 @@ class CardEmailService(
               $contactBlock
             </div>
 
-            <!-- FOOTER compacto com raio fino em texto (FE0E) -->
+            <!-- FOOTER (raio FE0E; sem anexo) -->
             <div style="background:linear-gradient(135deg,#0a2239,#0e4b68);color:#fff;
                         padding:6px 18px;text-align:center;font-size:14px;line-height:1;">
               <span role="img" aria-label="raio"
                     style="color:#ffd200;font-size:22px;vertical-align:middle;">&#x26A1;&#xFE0E;</span>
               <span style="vertical-align:middle;">© ${Year.now()} · Powered by
-                <strong>Andes Core Software</strong>
+                <strong>AndesCoreSoftware</strong>
               </span>
             </div>
           </div>

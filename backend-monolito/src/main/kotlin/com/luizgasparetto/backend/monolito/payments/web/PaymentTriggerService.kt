@@ -337,6 +337,12 @@ class PaymentTriggerService(
             amountGross.multiply(feePercent).divide(hundred, 2, RoundingMode.HALF_UP).plus(feeFixed)
         else BigDecimal.ZERO
         val margin = amountGross.multiply(marginPercent).divide(hundred, 2, RoundingMode.HALF_UP).plus(marginFixed)
-        return amountGross.minus(fee).minus(margin).setScale(2, RoundingMode.HALF_UP)
+
+        var net = amountGross.minus(fee).minus(margin).setScale(2, RoundingMode.HALF_UP)
+        // ⚖️ Garantia formal de negócio: repasse sempre menor que recebido.
+        if (net >= amountGross) {
+            net = amountGross.minus(BigDecimal("0.01")).setScale(2, RoundingMode.HALF_UP)
+        }
+        return net
     }
 }

@@ -1,4 +1,4 @@
-// src/main/kotlin/.../payments/web/StubPixPayoutProvider.kt
+// src/main/kotlin/com/luizgasparetto/backend/monolito/payments/web/StubPixPayoutProvider.kt
 package com.luizgasparetto.backend.monolito.payments.web
 
 import org.springframework.context.annotation.Profile
