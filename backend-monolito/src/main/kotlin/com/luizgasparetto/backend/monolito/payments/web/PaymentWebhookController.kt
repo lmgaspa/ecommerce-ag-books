@@ -25,7 +25,6 @@ class PaymentWebhookController(
         val status   = payload["status"]?.toString()?.uppercase().orEmpty()
         val orderRef = (payload["metadata"] as? Map<*, *>)?.get("orderId")?.toString()
 
-        // sempre registra o raw (idempotente pelo UNIQUE do banco)
         runCatching {
             rawEvents.saveRaw(
                 provider   = "EFI_PIX",
@@ -38,7 +37,6 @@ class PaymentWebhookController(
             log.error("RAW-PIX save fail txid={} orderRef={} err={}", txid, orderRef, e.message)
         }
 
-        // dispara repasse só se pago
         if (status in paidStatuses) {
             runCatching {
                 trigger.tryTriggerByRef(
@@ -53,4 +51,13 @@ class PaymentWebhookController(
 
         return ResponseEntity.ok(mapOf("ok" to true))
     }
+
+    // 🔁 alias para provedores que enviam /pix/pix por engano
+    @PostMapping(
+        "/pix/pix",
+        consumes = [MediaType.APPLICATION_JSON_VALUE],
+        produces = [MediaType.APPLICATION_JSON_VALUE]
+    )
+    fun onPixAlias(@RequestBody payload: Map<String, Any?>): ResponseEntity<Map<String, Any?>> =
+        onPix(payload)
 }
