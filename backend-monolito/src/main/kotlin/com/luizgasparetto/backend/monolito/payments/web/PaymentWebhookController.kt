@@ -21,43 +21,41 @@ class PaymentWebhookController(
         produces = [MediaType.APPLICATION_JSON_VALUE]
     )
     fun onPix(@RequestBody payload: Map<String, Any?>): ResponseEntity<Map<String, Any?>> {
-        val txid     = payload["txid"]?.toString().orEmpty()
-        val status   = payload["status"]?.toString()?.uppercase().orEmpty()
+        val txid     = payload["txid"]?.toString()
+        val status   = payload["status"]?.toString()?.uppercase()
         val orderRef = (payload["metadata"] as? Map<*, *>)?.get("orderId")?.toString()
 
+        // sempre registra o raw (idempotente pelo UNIQUE do banco)
         runCatching {
             rawEvents.saveRaw(
                 provider   = "EFI_PIX",
-                eventType  = if (status in paidStatuses) "pix.paid" else "pix.other",
-                externalId = txid,
+                eventType  = if (status != null && status in paidStatuses) "pix.paid" else "pix.other",
+                externalId = txid.orEmpty(),            // <- ✅ evita String? aqui
                 orderRef   = orderRef,
                 payload    = payload
             )
         }.onFailure { e ->
-            log.error("RAW-PIX save fail txid={} orderRef={} err={}", txid, orderRef, e.message)
+            log.error("RAW-PIX save fail txid={} orderRef={} err={}", txid.orEmpty(), orderRef, e.message)
         }
 
-        if (status in paidStatuses) {
+        // dispara repasse só se pago
+        if (status != null && status in paidStatuses) {
             runCatching {
                 trigger.tryTriggerByRef(
                     orderRef = orderRef,
-                    externalId = txid,
+                    externalId = txid.orEmpty(),        // <- ✅ idem aqui
                     sourceProvider = "PIX-WEBHOOK"
                 )
             }.onFailure { e ->
-                log.error("PAYOUT trigger fail txid={} orderRef={} err={}", txid, orderRef, e.message)
+                log.error("PAYOUT trigger fail txid={} orderRef={} err={}", txid.orEmpty(), orderRef, e.message)
             }
         }
 
         return ResponseEntity.ok(mapOf("ok" to true))
     }
 
-    // 🔁 alias para provedores que enviam /pix/pix por engano
-    @PostMapping(
-        "/pix/pix",
-        consumes = [MediaType.APPLICATION_JSON_VALUE],
-        produces = [MediaType.APPLICATION_JSON_VALUE]
-    )
+    // Rota extra para compat /alias (se existir no seu projeto)
+    @PostMapping("/pix/pix", consumes = [MediaType.APPLICATION_JSON_VALUE], produces = [MediaType.APPLICATION_JSON_VALUE])
     fun onPixAlias(@RequestBody payload: Map<String, Any?>): ResponseEntity<Map<String, Any?>> =
         onPix(payload)
 }

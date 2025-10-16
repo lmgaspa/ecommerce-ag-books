@@ -12,15 +12,22 @@ import java.math.BigDecimal
 @RequestMapping("/api/webhooks/efi/pix-send")
 class EfiPixSendWebhookController(
     private val jdbc: NamedParameterJdbcTemplate,
-    private val payoutEmail: PayoutEmailService
+    private val mail: PayoutEmailService
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
     @PostMapping
     fun onSendWebhook(@RequestBody payload: Map<String, Any?>): ResponseEntity<Void> {
+        // exemplos de campos possíveis: idEnvio, status (REALIZADO|NAO_REALIZADO), endToEndId, txid, valor
         val rawIdEnvio = (payload["idEnvio"] ?: payload["id_envio"])?.toString()
         val status = (payload["status"] ?: payload["situacao"])?.toString()?.uppercase()
-        if (rawIdEnvio.isNullOrBlank()) return ResponseEntity.ok().build()
+        val endToEndId = payload["endToEndId"]?.toString()
+        val txid = payload["txid"]?.toString()
+
+        if (rawIdEnvio.isNullOrBlank()) {
+            log.warn("Webhook Efí payout: sem idEnvio. payload={}", payload)
+            return ResponseEntity.ok().build()
+        }
 
         // Compat: aceita "payout-<id>" (legado) e "P<id>" (novo). Tenta também parse direto.
         val orderId = when {
@@ -30,66 +37,78 @@ class EfiPixSendWebhookController(
         }
 
         if (orderId == null) {
-            log.warn("Webhook Efí: idEnvio sem padrão esperado: {}", rawIdEnvio)
+            log.warn("Webhook Efí payout: idEnvio sem padrão esperado: {}", rawIdEnvio)
             return ResponseEntity.ok().build()
         }
 
-        // Carrega dados para e-mail (valor líquido e pix_key do favorecido)
-        val row = runCatching {
-            jdbc.queryForMap(
-                "SELECT amount_net, pix_key FROM payment_payouts WHERE order_id=:id",
-                mapOf("id" to orderId)
-            )
-        }.getOrElse {
-            log.error("Falha ao carregar payout p/ e-mail (orderId={}): {}", orderId, it.message)
-            emptyMap()
-        }
-
-        val amountNet = (row["amount_net"] as? BigDecimal) ?: BigDecimal.ZERO
-        val pixKey = row["pix_key"]?.toString().orEmpty()
+        // lê valores que precisamos para o e-mail (valor líquido e chave pix)
+        val row = jdbc.queryForMap(
+            """
+            SELECT amount_net, pix_key
+              FROM payment_payouts
+             WHERE order_id=:id
+            """.trimIndent(),
+            mapOf("id" to orderId)
+        )
+        val amountNet = (row["amount_net"] as? java.math.BigDecimal) ?: BigDecimal.ZERO
+        val pixKey = (row["pix_key"] as? String).orEmpty()
 
         when (status) {
             "REALIZADO" -> {
+                // marca CONFIRMED
                 jdbc.update(
                     """UPDATE payment_payouts
                           SET status='CONFIRMED', confirmed_at=NOW(), provider_ref=:ref
                         WHERE order_id=:id""",
                     mapOf("id" to orderId, "ref" to rawIdEnvio)
                 )
-                // e-mail de sucesso
+                log.info("Webhook Efí payout: CONFIRMED order #{} idEnvio={} valor={}", orderId, rawIdEnvio, amountNet)
+
+                // dispara e-mail de sucesso
                 runCatching {
-                    payoutEmail.sendPayoutConfirmedEmail(
+                    mail.sendPayoutConfirmedEmail(
                         orderId = orderId,
                         amount = amountNet,
                         payeePixKey = pixKey,
-                        idEnvio = rawIdEnvio
+                        idEnvio = rawIdEnvio,
+                        endToEndId = endToEndId,
+                        txid = txid,
+                        extraNote = "Confirmação recebida da Efí via webhook."
                     )
                 }.onFailure { e ->
-                    log.error("Falha ao enviar e-mail de CONFIRMED (orderId={}): {}", orderId, e.message)
+                    log.error("MAIL payout CONFIRMED falhou order #{}: {}", orderId, e.message, e)
                 }
             }
             "NAO_REALIZADO" -> {
+                // marca FAILED
                 jdbc.update(
                     """UPDATE payment_payouts
                           SET status='FAILED', failed_at=NOW(), fail_reason='NAO_REALIZADO', provider_ref=:ref
                         WHERE order_id=:id""",
                     mapOf("id" to orderId, "ref" to rawIdEnvio)
                 )
-                // e-mail de falha
+                log.warn("Webhook Efí payout: FAILED order #{} idEnvio={} valor={}", orderId, rawIdEnvio, amountNet)
+
+                // dispara e-mail de falha
                 runCatching {
-                    payoutEmail.sendPayoutFailedEmail(
+                    mail.sendPayoutFailedEmail(
                         orderId = orderId,
                         amount = amountNet,
                         payeePixKey = pixKey,
                         idEnvio = rawIdEnvio,
                         errorCode = "NAO_REALIZADO",
-                        errorMsg = "Efí retornou NAO_REALIZADO para o envio do PIX de repasse."
+                        errorMsg = "Efí sinalizou não realizado.",
+                        txid = txid,
+                        endToEndId = endToEndId,
+                        extraNote = "Falha reportada pela Efí via webhook."
                     )
                 }.onFailure { e ->
-                    log.error("Falha ao enviar e-mail de FAILED (orderId={}): {}", orderId, e.message)
+                    log.error("MAIL payout FAILED falhou order #{}: {}", orderId, e.message, e)
                 }
             }
-            else -> log.info("Webhook Efí PIX-SEND: idEnvio={}, status={}", rawIdEnvio, status)
+            else -> {
+                log.info("Webhook Efí payout: idEnvio={}, status={} (ignorando)", rawIdEnvio, status)
+            }
         }
         return ResponseEntity.ok().build()
     }

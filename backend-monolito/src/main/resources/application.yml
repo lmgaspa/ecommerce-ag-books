@@ -126,6 +126,11 @@ payout:
     cardDays: ${EFI_PAYOUT_DELAY_CARD_DAYS:31}     # lido pelo CardPayoutScheduler
     pixMinutes: ${EFI_PAYOUT_DELAY_PIX_MINUTES:0}
   scheduler:
+    reconciler:
+      enabled: true
+      fixedDelayMs: 60000        # roda a cada 60s
+      minSentAgeSeconds: 60      # só consulta SENT com +60s de idade
+      batchSize: 50
     card:
       cron: ${PAYOUT_SCHED_CARD_CRON:0 17 3 * * *}
       batchSize: ${PAYOUT_SCHED_CARD_BATCH:100}

@@ -1,4 +1,3 @@
-// src/main/kotlin/com/luizgasparetto/backend/monolito/payments/web/PaymentTriggerService.kt
 package com.luizgasparetto.backend.monolito.payments.web
 
 import com.luizgasparetto.backend.monolito.config.payments.EfiPayoutProps
@@ -6,6 +5,7 @@ import org.slf4j.LoggerFactory
 import org.springframework.core.env.Environment
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate
 import org.springframework.stereotype.Service
+import org.springframework.transaction.annotation.Transactional
 import java.math.BigDecimal
 import java.math.RoundingMode
 
@@ -20,13 +20,7 @@ data class PayoutResult(
     val providerRef: String? = null
 )
 
-/**
- * Regras de orquestração do repasse (payout) 1:1 por pedido.
- * - Aberto para extensão por:
- *   - PixPayoutProvider (injeção de estratégia de envio)
- *   - Resolução de chave favorecida via override por chamada
- *   - Descoberta dinâmica de colunas de total do pedido
- */
+/** OCP: provider injeta envio/consulta; service faz orquestração & persistência. */
 @Service
 class PaymentTriggerService(
     private val jdbc: NamedParameterJdbcTemplate,
@@ -37,13 +31,7 @@ class PaymentTriggerService(
     private val log = LoggerFactory.getLogger(javaClass)
     private val ABS_MIN = BigDecimal("1.20") // piso líquido mínimo
 
-    /**
-     * Dispara (ou atualiza) o payout 1:1 do pedido.
-     * @param orderRef        id do pedido em string (ex.: "481")
-     * @param externalId      txid/referência externa (para log/correlação)
-     * @param sourceProvider  origem (ex.: "PIX-POLLER" | "PIX-WEBHOOK" | "MANUAL")
-     * @param overridePixKey  opcional: força o favorecido desta chamada (não global)
-     */
+    @Transactional
     fun tryTriggerByRef(
         orderRef: String?,
         externalId: String,
@@ -53,19 +41,20 @@ class PaymentTriggerService(
         val orderId = orderRef?.toLongOrNull()
         if (orderId == null) {
             val msg = "orderRef inválido ou nulo; tx=$externalId"
-            log.warn(msg)
+            log.warn("PAYOUT TRIGGER: {}", msg)
             return PayoutResult(orderId, "ERROR", msg)
         }
 
-        // 1) Totais do pedido (itens + frete)
+        // 1) Totais do pedido
         val totals = runCatching { fetchOrderTotals(orderId) }.getOrElse {
             val msg = "Erro lendo totais do pedido: ${it.message}"
-            log.error(msg)
+            log.error("PAYOUT TRIGGER: {}", msg)
             return PayoutResult(orderId, "ERROR", msg)
         } ?: return PayoutResult(orderId, "ERROR", "Pedido não encontrado")
         val amountGross = totals.amountGross.max(BigDecimal.ZERO)
+        log.info("PAYOUT TRIGGER: order #{} amountGross={}", orderId, fmt(amountGross))
 
-        // 2) Parâmetros de cálculo
+        // 2) Parâmetros
         val includeGatewayFees = payoutProps.fees.includeGatewayFees
         val feePercent    = bd(payoutProps.feePercent)
         val feeFixed      = bd(payoutProps.feeFixed)
@@ -73,89 +62,99 @@ class PaymentTriggerService(
         val marginFixed   = bd(payoutProps.marginFixed)
         val configuredMin = bd(payoutProps.minSend)
         val effectiveMin  = configuredMin.max(ABS_MIN)
+        log.info(
+            "PAYOUT TRIGGER: params incFees={} fee%={} feeFix={} margin%={} marginFix={} minConf={} minEff={}",
+            includeGatewayFees, feePercent, feeFixed, marginPercent, marginFixed,
+            fmt(configuredMin), fmt(effectiveMin)
+        )
 
-        // 3) Cálculo líquido
+        // 3) Líquido
         val amountNet = calcNet(amountGross, includeGatewayFees, feePercent, feeFixed, marginPercent, marginFixed)
+        log.info("PAYOUT TRIGGER: order #{} amountNet={} (gross={})", orderId, fmt(amountNet), fmt(amountGross))
 
-        // 4) Chave PIX do favorecido (override → props → autor)
+        // 4) Favorecido
         val favoredKey = resolveFavoredKey(overridePixKey)
         if (favoredKey.isBlank()) {
             val msg = "Sem EFI_PAYOUT_FAVORED_KEY e sem autor ativo com pix_key — repasse abortado"
-            log.warn(msg)
+            log.warn("PAYOUT TRIGGER: {}", msg)
             return PayoutResult(orderId, "ERROR", msg, amountGross, amountNet, effectiveMin, null, null)
         }
+        log.info("PAYOUT TRIGGER: order #{} favoredKey={}", orderId, maskKey(favoredKey))
 
-        // 5) Upsert CREATED (idempotente por order_id)
+        // 5) UPSERT CREATED (idempotente, sem rebaixar SENT/CONFIRMED)
         runCatching {
             upsertCreated(
-                orderId = orderId,
-                amountGross = amountGross,
-                amountNet = amountNet,
-                includeGatewayFees = includeGatewayFees,
-                feePercent = feePercent,
-                feeFixed = feeFixed,
-                marginPercent = marginPercent,
-                marginFixed = marginFixed,
-                minSend = effectiveMin,
-                pixKey = favoredKey
+                orderId, amountGross, amountNet, includeGatewayFees,
+                feePercent, feeFixed, marginPercent, marginFixed, effectiveMin, favoredKey
             )
         }.onFailure {
             val msg = "Falha ao registrar payout CREATED: ${it.message}"
-            log.error(msg)
+            log.error("PAYOUT TRIGGER: {}", msg)
             return PayoutResult(orderId, "ERROR", msg, amountGross, amountNet, effectiveMin, favoredKey, null)
         }
 
-        // 6) Regra de mínimo
+        // 6) Mínimo
         if (amountNet < effectiveMin) {
             val reason = "Valor líquido ${fmt(amountNet)} abaixo do mínimo ${fmt(effectiveMin)}"
-            runCatching { markFailed(orderId, reason) }
+            runCatching { markFailed(orderId, reason) }.onFailure { e ->
+                log.warn("PAYOUT TRIGGER: falha ao marcar FAILED por mínimo: {}", e.message)
+            }
             log.warn("Payout FAILED order #{}: {}", orderId, reason)
             return PayoutResult(orderId, "FAILED", reason, amountGross, amountNet, effectiveMin, favoredKey, null)
         }
 
-        // 7) Envio PIX (provider) → marca SENT; CONFIRMED vem via webhook (exceto profile stub)
-        val sendResult = runCatching { pixProvider.sendPixPayout(orderId, amountNet, favoredKey) }
+        // 7) Envio (provider) → SENT
+        val sendResult = runCatching {
+            log.info("PAYOUT TRIGGER: enviando PIX order #{} net={} key={} src={}", orderId, fmt(amountNet), maskKey(favoredKey), sourceProvider)
+            pixProvider.sendPixPayout(orderId, amountNet, favoredKey) // retorna idEnvio (Efí) ou ref real do provedor
+        }
         if (sendResult.isFailure) {
             val errMsg = sendResult.exceptionOrNull()?.message ?: "erro desconhecido no provider"
             runCatching { markFailed(orderId, "Envio PIX falhou: $errMsg") }
-            log.error("Falha ao enviar payout order #{}: {}", orderId, errMsg)
+            log.error("PAYOUT TRIGGER: Falha ao enviar payout order #{}: {}", orderId, errMsg)
             return PayoutResult(orderId, "FAILED", "Envio PIX falhou: $errMsg", amountGross, amountNet, effectiveMin, favoredKey, null)
         }
-        val ref = sendResult.getOrThrow()
+        val providerRef = sendResult.getOrThrow()
 
-        runCatching { markSent(orderId, ref) }.onFailure {
+        // ✅ Aceita idEnvio padrão da Efí (ex.: "P634"): apenas valide formato alfanumérico (1..35)
+        if (!providerRef.matches(Regex("^[A-Za-z0-9]{1,35}$"))) {
+            val reason = "providerRef '$providerRef' possui formato inválido (esperado: alfanumérico até 35 chars)"
+            runCatching { markFailed(orderId, reason) }
+            log.warn("PAYOUT TRIGGER: {}", reason)
+            return PayoutResult(orderId, "FAILED", reason, amountGross, amountNet, effectiveMin, favoredKey, null)
+        }
+
+        runCatching { markSent(orderId, providerRef) }.onFailure {
             val msg = "Falha ao marcar SENT: ${it.message}"
-            log.error(msg)
-            return PayoutResult(orderId, "ERROR", msg, amountGross, amountNet, effectiveMin, favoredKey, ref)
+            log.error("PAYOUT TRIGGER: {}", msg)
+            return PayoutResult(orderId, "ERROR", msg, amountGross, amountNet, effectiveMin, favoredKey, providerRef)
         }
 
         if (isStubProfile()) {
-            // Em dev/local (stub), confirma de imediato
+            // stub → confirma já
             runCatching { markConfirmed(orderId) }.onFailure {
                 val msg = "Falha ao marcar CONFIRMED (stub): ${it.message}"
-                log.error(msg)
-                return PayoutResult(orderId, "ERROR", msg, amountGross, amountNet, effectiveMin, favoredKey, ref)
+                log.error("PAYOUT TRIGGER: {}", msg)
+                return PayoutResult(orderId, "ERROR", msg, amountGross, amountNet, effectiveMin, favoredKey, providerRef)
             }
             log.info(
                 "Payout CONFIRMED (stub) order #{} providerRef={} src={} gross={} net={} key={}",
-                orderId, ref, sourceProvider, fmt(amountGross), fmt(amountNet), maskKey(favoredKey)
+                orderId, providerRef, sourceProvider, fmt(amountGross), fmt(amountNet), maskKey(favoredKey)
             )
-            return PayoutResult(orderId, "SUCCESS", null, amountGross, amountNet, effectiveMin, favoredKey, ref)
+            return PayoutResult(orderId, "SUCCESS", null, amountGross, amountNet, effectiveMin, favoredKey, providerRef)
         }
 
         log.info(
             "Payout SENT order #{} providerRef={} src={} gross={} net={} key={}",
-            orderId, ref, sourceProvider, fmt(amountGross), fmt(amountNet), maskKey(favoredKey)
+            orderId, providerRef, sourceProvider, fmt(amountGross), fmt(amountNet), maskKey(favoredKey)
         )
-        // Em prod, status final vem do webhook de envio (REALIZADO/NAO_REALIZADO)
         return PayoutResult(
             orderId, "SUCCESS",
-            "Enviado ao provedor; aguardando confirmação via webhook",
-            amountGross, amountNet, effectiveMin, favoredKey, ref
+            "Enviado ao provedor; aguardando confirmação", amountGross, amountNet, effectiveMin, favoredKey, providerRef
         )
     }
 
-    // ===== consulta dinâmica dos totais (itens + frete) =====
+    // ===== consulta dinâmica dos totais (itens + frete)
     private data class OrderTotals(val amountGross: BigDecimal)
 
     private fun fetchOrderTotals(orderId: Long): OrderTotals? {
@@ -169,8 +168,8 @@ class PaymentTriggerService(
 
         fun has(name: String) = cols.contains(name.lowercase())
 
-        val itemCandidates = listOf("items_total", "subtotal", "total_items", "amount_items", "itemsamount", "valor_itens", "valor_total")
-        val shipCandidates = listOf("shipping_total", "freight_total", "frete_total", "frete", "shipping", "valor_frete")
+        val itemCandidates = listOf("items_total","subtotal","total_items","amount_items","itemsamount","valor_itens","valor_total")
+        val shipCandidates = listOf("shipping_total","freight_total","frete_total","frete","shipping","valor_frete")
 
         val itemCol = itemCandidates.firstOrNull { has(it) }
         val shipCol = shipCandidates.firstOrNull { has(it) }
@@ -185,7 +184,7 @@ class PaymentTriggerService(
             has("total") ->
                 "SELECT total AS amount_gross FROM orders WHERE id = :id"
             else -> {
-                log.warn("Não encontrei colunas conhecidas em orders; usando 0 como amount_gross (orderId={})", orderId)
+                log.warn("PAYOUT TRIGGER: colunas não reconhecidas em orders; usando 0 como amount_gross (orderId={})", orderId)
                 "SELECT 0::numeric(12,2) AS amount_gross"
             }
         }
@@ -195,7 +194,7 @@ class PaymentTriggerService(
         }.firstOrNull()
     }
 
-    // ===== persistência payout (compatível com coluna legacy 'amount' NOT NULL) =====
+    // ===== introspecção e persistência
     private fun tableHasColumn(table: String, column: String): Boolean =
         jdbc.queryForList(
             """
@@ -222,7 +221,7 @@ class PaymentTriggerService(
         minSend: BigDecimal,
         pixKey: String
     ) {
-        val hasLegacyAmount = tableHasColumn("payment_payouts", "amount") // coluna legado NOT NULL
+        val hasLegacyAmount = tableHasColumn("payment_payouts", "amount")
 
         val params = mutableMapOf<String, Any>(
             "id"  to orderId,
@@ -238,6 +237,8 @@ class PaymentTriggerService(
         )
         if (hasLegacyAmount) params["amt"] = amountNet.setScale(2, RoundingMode.HALF_UP)
 
+        val whereGuard = "WHERE payment_payouts.status NOT IN ('SENT','CONFIRMED')"
+
         val sql =
             if (hasLegacyAmount) {
                 """
@@ -248,16 +249,17 @@ class PaymentTriggerService(
                 VALUES (:id,'CREATED',:amt,:ag,:an,:inc,:fp,:ff,:mp,:mf,:ms,:pix, NOW())
                 ON CONFLICT (order_id) DO UPDATE
                   SET status='CREATED',
-                      amount       = EXCLUDED.amount,
-                      amount_gross = EXCLUDED.amount_gross,
-                      amount_net   = EXCLUDED.amount_net,
+                      amount         = EXCLUDED.amount,
+                      amount_gross   = EXCLUDED.amount_gross,
+                      amount_net     = EXCLUDED.amount_net,
                       include_gateway_fees = EXCLUDED.include_gateway_fees,
-                      fee_percent  = EXCLUDED.fee_percent,
-                      fee_fixed    = EXCLUDED.fee_fixed,
+                      fee_percent    = EXCLUDED.fee_percent,
+                      fee_fixed      = EXCLUDED.fee_fixed,
                       margin_percent = EXCLUDED.margin_percent,
                       margin_fixed   = EXCLUDED.margin_fixed,
                       min_send       = EXCLUDED.min_send,
                       pix_key        = EXCLUDED.pix_key
+                $whereGuard
                 """.trimIndent()
             } else {
                 """
@@ -268,45 +270,58 @@ class PaymentTriggerService(
                 VALUES (:id,'CREATED',:ag,:an,:inc,:fp,:ff,:mp,:mf,:ms,:pix, NOW())
                 ON CONFLICT (order_id) DO UPDATE
                   SET status='CREATED',
-                      amount_gross = EXCLUDED.amount_gross,
-                      amount_net   = EXCLUDED.amount_net,
+                      amount_gross   = EXCLUDED.amount_gross,
+                      amount_net     = EXCLUDED.amount_net,
                       include_gateway_fees = EXCLUDED.include_gateway_fees,
-                      fee_percent  = EXCLUDED.fee_percent,
-                      fee_fixed    = EXCLUDED.fee_fixed,
+                      fee_percent    = EXCLUDED.fee_percent,
+                      fee_fixed      = EXCLUDED.fee_fixed,
                       margin_percent = EXCLUDED.margin_percent,
                       margin_fixed   = EXCLUDED.margin_fixed,
                       min_send       = EXCLUDED.min_send,
                       pix_key        = EXCLUDED.pix_key
+                $whereGuard
                 """.trimIndent()
             }
 
-        jdbc.update(sql, params)
+        val rows = jdbc.update(sql, params)
+        log.debug("PAYOUT TRIGGER: upsertCreated order #{} rows={}", orderId, rows)
     }
 
     private fun markSent(orderId: Long, providerRef: String) {
-        jdbc.update(
-            """UPDATE payment_payouts SET status='SENT', provider_ref=:ref, sent_at=NOW() WHERE order_id=:id""",
+        val rows = jdbc.update(
+            """UPDATE payment_payouts
+                 SET status='SENT', provider_ref=:ref, sent_at=NOW()
+               WHERE order_id=:id
+                 AND status IN ('CREATED','FAILED')""",
             mapOf("id" to orderId, "ref" to providerRef)
         )
+        log.info("PAYOUT TRIGGER: markSent order #{} ref={} rows={}", orderId, providerRef, rows)
     }
 
     private fun markConfirmed(orderId: Long) {
-        jdbc.update(
-            """UPDATE payment_payouts SET status='CONFIRMED', confirmed_at=NOW() WHERE order_id=:id""",
+        val rows = jdbc.update(
+            """UPDATE payment_payouts
+                 SET status='CONFIRMED', confirmed_at=NOW()
+               WHERE order_id=:id
+                 AND status IN ('SENT','CREATED','FAILED')""",
             mapOf("id" to orderId)
         )
+        log.info("PAYOUT TRIGGER: markConfirmed order #{} rows={}", orderId, rows)
     }
 
     private fun markFailed(orderId: Long, reason: String) {
-        jdbc.update(
-            """UPDATE payment_payouts SET status='FAILED', fail_reason=:r, failed_at=NOW() WHERE order_id=:id""",
+        val rows = jdbc.update(
+            """UPDATE payment_payouts
+                 SET status='FAILED', fail_reason=:r, failed_at=NOW()
+               WHERE order_id=:id
+                 AND status <> 'CONFIRMED'""",
             mapOf("id" to orderId, "r" to reason)
         )
+        log.warn("PAYOUT TRIGGER: markFailed order #{} reason='{}' rows={}", orderId, reason, rows)
     }
 
     // ===== helpers =====
 
-    /** Resolve chave favorecida com precedência: override → props → autor ativo. */
     private fun resolveFavoredKey(overridePixKey: String?): String =
         overridePixKey?.takeIf { it.isNotBlank() }
             ?: payoutProps.favoredKey?.takeIf { it.isNotBlank() }
@@ -321,8 +336,7 @@ class PaymentTriggerService(
     private fun bd(d: Double) = BigDecimal.valueOf(d)
     private fun fmt(v: BigDecimal) = "R$ " + v.setScale(2, RoundingMode.HALF_UP).toPlainString()
     private fun maskKey(k: String) = if (k.length <= 6) "***" else k.take(3) + "***" + k.takeLast(3)
-    private fun isStubProfile(): Boolean =
-        env.activeProfiles.any { it.equals("stub", ignoreCase = true) }
+    private fun isStubProfile(): Boolean = env.activeProfiles.any { it.equals("stub", ignoreCase = true) }
 
     private fun calcNet(
         amountGross: BigDecimal,
@@ -339,10 +353,7 @@ class PaymentTriggerService(
         val margin = amountGross.multiply(marginPercent).divide(hundred, 2, RoundingMode.HALF_UP).plus(marginFixed)
 
         var net = amountGross.minus(fee).minus(margin).setScale(2, RoundingMode.HALF_UP)
-        // ⚖️ Garantia formal de negócio: repasse sempre menor que recebido.
-        if (net >= amountGross) {
-            net = amountGross.minus(BigDecimal("0.01")).setScale(2, RoundingMode.HALF_UP)
-        }
+        if (net >= amountGross) net = amountGross.minus(BigDecimal("0.01")).setScale(2, RoundingMode.HALF_UP)
         return net
     }
 }
