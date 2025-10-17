@@ -29,9 +29,10 @@ class CardWatcher(
         }
         val delay = delays[attempt]
         val runAt = Instant.now().plusSeconds(delay)
-        val lastMoment = expireAt.plusSeconds(10)
+        // Para 60 segundos antes do TTL para segurança máxima
+        val lastMoment = expireAt.minusSeconds(60) // 60s antes de expirar
         if (runAt.isAfter(lastMoment)) {
-            log.info("CARD-POLL: parando (além do TTL) chargeId={}", chargeId); return
+            log.info("CARD-POLL: parando (60s antes do TTL) chargeId={}", chargeId); return
         }
 
         log.debug("CARD-POLL: agendando tentativa {} chargeId={} em {}s", attempt + 1, chargeId, delay)

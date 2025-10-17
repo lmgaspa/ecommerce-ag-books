@@ -31,16 +31,19 @@ interface PixCheckoutResponse {
 }
 
 // Hook para gerenciar avisos de segurança (SRP)
-// Hook para gerenciar avisos de segurança (SRP)
-const useSecurityWarnings = (remainingSec: number, warningAt?: number, securityWarningAt?: number) => {
+const useSecurityWarnings = (
+  remainingSec: number,
+  warningAt?: number,
+  securityWarningAt?: number
+) => {
   const [warning, setWarning] = useState<string | null>(null);
   const [securityWarning, setSecurityWarning] = useState<string | null>(null);
 
   useEffect(() => {
     if (securityWarningAt && remainingSec <= securityWarningAt) {
-      setSecurityWarning("🔒 Por questões de segurança, o PIX será invalidado em 5 segundos!");
+      setSecurityWarning("🔒 Por questões de segurança, o PIX foi invalidado!");
     } else if (warningAt && remainingSec <= warningAt) {
-      setWarning("⚠️ PIX expira em 10 segundos! Pague agora!");
+      setWarning("⚠️ PIX será invalidado em 10 segundos! Pague agora!");
     } else {
       setWarning(null);
       setSecurityWarning(null);
@@ -51,7 +54,13 @@ const useSecurityWarnings = (remainingSec: number, warningAt?: number, securityW
 };
 
 // Componente para exibir avisos (SRP)
-const SecurityWarning = ({ warning, securityWarning }: { warning: string | null; securityWarning: string | null }) => {
+const SecurityWarning = ({
+  warning,
+  securityWarning,
+}: {
+  warning: string | null;
+  securityWarning: string | null;
+}) => {
   if (securityWarning) {
     return (
       <div className="bg-red-100 text-red-800 p-3 rounded border border-red-300 font-bold mb-4">
@@ -59,15 +68,15 @@ const SecurityWarning = ({ warning, securityWarning }: { warning: string | null;
       </div>
     );
   }
-  
+
   if (warning) {
     return (
-      <div className="bg-red-50 text-red-700 p-3 rounded border border-red-200 mb-4">
+      <div className="bg-orange-50 text-orange-700 p-3 rounded border border-orange-200 mb-4">
         {warning}
       </div>
     );
   }
-  
+
   return null;
 };
 
@@ -83,7 +92,9 @@ export default function PixPaymentPage() {
   const [loading, setLoading] = useState(false);
   const [orderId, setOrderId] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [checkoutData, setCheckoutData] = useState<PixCheckoutResponse | null>(null);
+  const [checkoutData, setCheckoutData] = useState<PixCheckoutResponse | null>(
+    null
+  );
 
   const sseRef = useRef<EventSource | null>(null);
   const retryTimerRef = useRef<number | null>(null);
@@ -97,7 +108,7 @@ export default function PixPaymentPage() {
       sseRef.current = null;
     }
   };
-  
+
   const clearRetryTimer = () => {
     if (retryTimerRef.current) {
       window.clearTimeout(retryTimerRef.current);
@@ -131,7 +142,10 @@ export default function PixPaymentPage() {
   }, [cartItems.length]);
 
   useEffect(() => {
-    const form = cookieStorage.get<CheckoutFormData | null>("checkoutForm", null);
+    const form = cookieStorage.get<CheckoutFormData | null>(
+      "checkoutForm",
+      null
+    );
     if (!form || cartItems.length === 0) return;
     calcularFreteComBaseEmCarrinho({ cep: form.cep, cpf: form.cpf }, cartItems)
       .then((v) => {
@@ -149,8 +163,8 @@ export default function PixPaymentPage() {
 
   // Hook para avisos de segurança
   const { warning, securityWarning } = useSecurityWarnings(
-    remainingSec, 
-    checkoutData?.warningAt, 
+    remainingSec,
+    checkoutData?.warningAt,
     checkoutData?.securityWarningAt
   );
 
@@ -158,7 +172,10 @@ export default function PixPaymentPage() {
     const run = async () => {
       if (frete === null || cartItems.length === 0 || orderId) return;
 
-      const savedForm = cookieStorage.get<CheckoutFormData | null>("checkoutForm", null);
+      const savedForm = cookieStorage.get<CheckoutFormData | null>(
+        "checkoutForm",
+        null
+      );
       if (!savedForm) {
         navigate("/checkout");
         return;
@@ -196,7 +213,9 @@ export default function PixPaymentPage() {
         if (!res.ok) {
           const text = await res.text();
           if (res.status === 409 || res.status === 422) {
-            setErrorMsg("Indisponível no momento. Outro cliente reservou este item.");
+            setErrorMsg(
+              "Indisponível no momento. Outro cliente reservou este item."
+            );
             setTimeout(() => navigate("/"), 2000);
             return;
           }
@@ -291,7 +310,10 @@ export default function PixPaymentPage() {
         // Salva snapshot do purchase para a tela de confirmação disparar
         try {
           const itemsPayload = mapCartItems(cartItems);
-          const subtotal = cartItems.reduce((acc, i) => acc + i.price * i.quantity, 0);
+          const subtotal = cartItems.reduce(
+            (acc, i) => acc + i.price * i.quantity,
+            0
+          );
           const shippingVal = Number(frete ?? 0);
           const payload = {
             transaction_id: id,
@@ -301,7 +323,10 @@ export default function PixPaymentPage() {
             tax: 0,
             items: itemsPayload,
           };
-          sessionStorage.setItem("ga_purchase_payload", JSON.stringify(payload));
+          sessionStorage.setItem(
+            "ga_purchase_payload",
+            JSON.stringify(payload)
+          );
         } catch {
           /* no-op */
         }
@@ -312,9 +337,15 @@ export default function PixPaymentPage() {
           timerRef.current = null;
         }
         cookieStorage.remove("cart");
-        const checkoutForm = cookieStorage.get<CheckoutFormData | null>("checkoutForm", null);
+        const checkoutForm = cookieStorage.get<CheckoutFormData | null>(
+          "checkoutForm",
+          null
+        );
         const fullName = checkoutForm
-          ? [checkoutForm.firstName, checkoutForm.lastName].filter(Boolean).join(" ").trim()
+          ? [checkoutForm.firstName, checkoutForm.lastName]
+              .filter(Boolean)
+              .join(" ")
+              .trim()
           : "";
         navigate(
           `/pedido-confirmado?orderId=${id}${
@@ -451,11 +482,13 @@ export default function PixPaymentPage() {
               )}
             </>
           ) : (
-            <div className="p-4 border rounded bg-yellow-50 text-yellow-800 inline-block">
-              <p className="font-medium">PIX inválido por questões de segurança</p>
+            <div className="p-4 border rounded bg-red-50 text-red-800 inline-block">
+              <p className="font-medium">
+                PIX invalidado por questões de segurança
+              </p>
               <p className="text-sm">
-                O tempo para pagamento acabou. Por questões de segurança, o PIX foi invalidado.
-                Gere um novo pedido para tentar novamente.
+                O PIX foi invalidado por questões de segurança aos 10 segundos
+                restantes. Gere um novo pedido para tentar novamente.
               </p>
               <button
                 className="mt-3 bg-black text-white px-4 py-2 rounded"

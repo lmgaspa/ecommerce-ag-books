@@ -121,8 +121,8 @@ class CardCheckoutService(
             status = result.status,
             reserveExpiresAt = fresh.reserveExpiresAt?.toString(),
             ttlSeconds = reserveTtlSeconds,
-            warningAt = 840, // Avisar quando faltar 60 segundos (15min - 1min)
-            securityWarningAt = 870 // Aviso de segurança quando faltar 30 segundos
+            warningAt = 60, // Avisar quando faltar 60 segundos
+            securityWarningAt = 60 // INVALIDAR quando faltar 60 segundos (segurança máxima)
         )
         }
 
@@ -142,8 +142,8 @@ class CardCheckoutService(
             status = result.status,
             reserveExpiresAt = fresh.reserveExpiresAt?.toString(),
             ttlSeconds = reserveTtlSeconds,
-            warningAt = 840, // Avisar quando faltar 60 segundos (15min - 1min)
-            securityWarningAt = 870 // Aviso de segurança quando faltar 30 segundos
+            warningAt = 60, // Avisar quando faltar 60 segundos
+            securityWarningAt = 60 // INVALIDAR quando faltar 60 segundos (segurança máxima)
         )
     }
 

@@ -31,10 +31,10 @@ class PixWatcher(
         val delay = delays[attempt]
         val runAt = Instant.now().plusSeconds(delay)
 
-        // Para 15 segundos antes do TTL para segurança
-        val lastMoment = expireAt.minusSeconds(15) // 15s antes de expirar
+        // Para 10 segundos antes do TTL para segurança máxima
+        val lastMoment = expireAt.minusSeconds(10) // 10s antes de expirar
         if (runAt.isAfter(lastMoment)) {
-            log.info("POLL: parando (15s antes do TTL) txid={}", txid); return
+            log.info("POLL: parando (10s antes do TTL) txid={}", txid); return
         }
 
         log.info("POLL: agendando tentativa {} para txid={} em {}s", attempt + 1, txid, delay)

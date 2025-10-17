@@ -69,7 +69,7 @@ class PixCheckoutService(
             reserveExpiresAt = order.reserveExpiresAt?.toString(),
             ttlSeconds = reserveTtlSeconds,
             warningAt = 10, // Avisar quando faltar 10 segundos
-            securityWarningAt = 5 // Aviso de segurança quando faltar 5 segundos
+            securityWarningAt = 10 // INVALIDAR quando faltar 10 segundos (segurança máxima)
         )
     }
 

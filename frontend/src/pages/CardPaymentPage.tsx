@@ -183,15 +183,17 @@ export default function CardPaymentPage() {
   const numberDigits = card.number.replace(/\D/g, "");
   const cvvLen = brand === "amex" ? 4 : 3;
 
-  // Timer para controle de expiração
+  // Timer para controle de expiração - FIXED: Now works with partial data
   useEffect(() => {
-    if (!checkoutResponse?.ttlSeconds || !checkoutResponse?.warningAt || !checkoutResponse?.securityWarningAt) {
+    // FIXED: Only require ttlSeconds, not all warning fields
+    if (!checkoutResponse?.ttlSeconds) {
       return;
     }
 
     const ttlSeconds = checkoutResponse.ttlSeconds;
-    const warningAt = checkoutResponse.warningAt;
-    const securityWarningAt = checkoutResponse.securityWarningAt;
+    // FIXED: Added fallbacks for missing warning data (OCP compliance)
+    const warningAt = checkoutResponse.warningAt || 60; // Fallback to 60 seconds
+    const securityWarningAt = checkoutResponse.securityWarningAt || 60; // Fallback to 60 seconds
 
     // Inicia o timer
     setTimeLeft(ttlSeconds);
@@ -202,12 +204,12 @@ export default function CardPaymentPage() {
         
         const newTime = prev - 1;
         
-        // Aviso de segurança (30 segundos restantes)
+        // FIXED: Security warning at 60 seconds (not 30)
         if (newTime <= securityWarningAt && !showSecurityWarning) {
           setShowSecurityWarning(true);
         }
         
-        // Aviso normal (60 segundos restantes)
+        // FIXED: Normal warning at 60 seconds (not 60)
         if (newTime <= warningAt && !showWarning) {
           setShowWarning(true);
         }
@@ -451,6 +453,7 @@ export default function CardPaymentPage() {
     <div className="max-w-md mx-auto p-6">
       <h2 className="text-xl font-semibold mb-4 text-center">Pagamento com Cartão</h2>
 
+      {/* FIXED: Updated warning messages to match backend security logic */}
       {/* Aviso de expiração em 15 minutos */}
       {checkoutResponse && !isExpired && (
         <div className="bg-blue-50 text-blue-700 p-3 mb-4 rounded-lg border border-blue-200">
@@ -464,40 +467,40 @@ export default function CardPaymentPage() {
         </div>
       )}
 
-      {/* Aviso de 60 segundos restantes */}
+      {/* FIXED: Warning at 60 seconds - updated text and styling */}
       {showWarning && !isExpired && (
-        <div className="bg-yellow-50 text-yellow-700 p-3 mb-4 rounded-lg border border-yellow-200">
+        <div className="bg-orange-50 text-orange-700 p-3 mb-4 rounded-lg border border-orange-200">
           <div className="flex items-center">
             <span className="text-lg mr-2">⚠️</span>
             <div>
-              <p className="font-medium">Atenção! Restam apenas {timeLeft && formatTimeLeft(timeLeft)}</p>
-              <p className="text-sm">Complete o pagamento rapidamente</p>
+              <p className="font-medium">Cartão será invalidado em {timeLeft && formatTimeLeft(timeLeft)}!</p>
+              <p className="text-sm">Complete o pagamento agora</p>
             </div>
           </div>
         </div>
       )}
 
-      {/* Aviso de segurança - 30 segundos restantes */}
+      {/* FIXED: Security warning at 60 seconds - updated text and styling */}
       {showSecurityWarning && !isExpired && (
         <div className="bg-red-50 text-red-700 p-3 mb-4 rounded-lg border border-red-200">
           <div className="flex items-center">
             <span className="text-lg mr-2">🚨</span>
             <div>
-              <p className="font-medium">Por questões de segurança, restam apenas {timeLeft && formatTimeLeft(timeLeft)}</p>
+              <p className="font-medium">Por questões de segurança, o cartão foi invalidado!</p>
               <p className="text-sm">Complete o pagamento agora ou será necessário reiniciar</p>
             </div>
           </div>
         </div>
       )}
 
-      {/* Pagamento expirado */}
+      {/* FIXED: Expiration message - updated text to match backend logic */}
       {isExpired && (
         <div className="bg-red-50 text-red-700 p-3 mb-4 rounded-lg border border-red-200">
           <div className="flex items-center">
             <span className="text-lg mr-2">❌</span>
             <div>
-              <p className="font-medium">Pagamento expirado por questões de segurança</p>
-              <p className="text-sm">Por favor, reinicie o processo de pagamento</p>
+              <p className="font-medium">Cartão invalidado por questões de segurança</p>
+              <p className="text-sm">O cartão foi invalidado aos 60 segundos restantes. Reinicie o processo de pagamento</p>
             </div>
           </div>
         </div>
