@@ -67,7 +67,9 @@ class PixCheckoutService(
             orderId = order.id.toString(),
             txid = txid,
             reserveExpiresAt = order.reserveExpiresAt?.toString(),
-            ttlSeconds = reserveTtlSeconds
+            ttlSeconds = reserveTtlSeconds,
+            warningAt = 290, // Avisar quando faltar 10 segundos
+            securityWarningAt = 295 // Aviso de segurança quando faltar 5 segundos
         )
     }
 

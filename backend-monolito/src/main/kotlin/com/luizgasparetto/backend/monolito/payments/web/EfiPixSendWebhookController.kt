@@ -1,7 +1,7 @@
 // src/main/kotlin/com/luizgasparetto/backend/monolito/payments/web/EfiPixSendWebhookController.kt
 package com.luizgasparetto.backend.monolito.payments.web
 
-import com.luizgasparetto.backend.monolito.services.PayoutEmailService
+import com.luizgasparetto.backend.monolito.services.payout.pix.PayoutPixEmailService
 import org.slf4j.LoggerFactory
 import org.springframework.http.ResponseEntity
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate
@@ -12,7 +12,7 @@ import java.math.BigDecimal
 @RequestMapping("/api/webhooks/efi/pix-send")
 class EfiPixSendWebhookController(
     private val jdbc: NamedParameterJdbcTemplate,
-    private val mail: PayoutEmailService
+    private val mail: PayoutPixEmailService
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 

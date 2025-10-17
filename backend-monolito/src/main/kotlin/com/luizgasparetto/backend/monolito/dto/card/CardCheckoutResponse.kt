@@ -4,6 +4,10 @@ data class CardCheckoutResponse(
     val success: Boolean,
     val message: String,
     val orderId: String,
-    val chargeId: String?,   // id da cobrança retornado pela Efí (pode ser nulo em falha)
-    val status: String       // ex.: "approved", "processing", "failed"
+    val chargeId: String? = null,
+    val status: String? = null,
+    val reserveExpiresAt: String? = null, // ISO-8601 OffsetDateTime
+    val ttlSeconds: Long? = null,
+    val warningAt: Int? = null, // Avisar quando faltar X segundos
+    val securityWarningAt: Int? = null // Aviso de segurança quando faltar X segundos
 )

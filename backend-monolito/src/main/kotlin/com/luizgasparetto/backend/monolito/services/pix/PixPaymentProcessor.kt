@@ -9,7 +9,7 @@ import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.OffsetDateTime
 import com.luizgasparetto.backend.monolito.payments.web.PaymentTriggerService
-import com.luizgasparetto.backend.monolito.services.PayoutEmailService
+import com.luizgasparetto.backend.monolito.services.payout.pix.PayoutPixEmailService
 import java.math.BigDecimal
 
 @Service
@@ -18,7 +18,7 @@ class PixPaymentProcessor(
     private val emailService: PixEmailService,
     private val events: OrderEventsPublisher,
     private val payoutTrigger: PaymentTriggerService,
-    private val payoutEmail: PayoutEmailService // <- e-mails de repasse (confirmado/falha)
+    private val payoutEmail: PayoutPixEmailService // <- e-mails de repasse (confirmado/falha)
 ) {
     private val log = LoggerFactory.getLogger(PixPaymentProcessor::class.java)
     private val paidStatuses = setOf("CONCLUIDA","LIQUIDADO","LIQUIDADA","ATIVA-RECEBIDA","COMPLETED","PAID")

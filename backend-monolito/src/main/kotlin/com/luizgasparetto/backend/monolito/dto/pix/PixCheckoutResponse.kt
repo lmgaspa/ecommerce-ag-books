@@ -7,5 +7,7 @@ data class PixCheckoutResponse(
     val orderId: String,
     val txid: String,
     val reserveExpiresAt: String? = null, // ISO-8601 OffsetDateTime
-    val ttlSeconds: Long? = null
+    val ttlSeconds: Long? = null,
+    val warningAt: Int? = null, // Avisar quando faltar X segundos
+    val securityWarningAt: Int? = null // Aviso de segurança quando faltar X segundos
 )

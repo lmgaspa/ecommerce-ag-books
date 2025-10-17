@@ -42,6 +42,18 @@ interface CheckoutFormData {
   shipping?: number;
 }
 
+interface CardCheckoutResponse {
+  success: boolean;
+  message: string;
+  orderId: string;
+  chargeId?: string | null;
+  status?: string | null;
+  reserveExpiresAt?: string | null;
+  ttlSeconds?: number | null;
+  warningAt?: number | null;
+  securityWarningAt?: number | null;
+}
+
 type BrandUI = CardBrand;
 
 // Read env in a way that survives Vite type narrowing during SSR/CSR builds.
@@ -160,9 +172,60 @@ export default function CardPaymentPage() {
   const [installmentOptions, setInstallmentOptions] = useState<InstallmentItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  
+  // Estados para controle de expiração
+  const [checkoutResponse, setCheckoutResponse] = useState<CardCheckoutResponse | null>(null);
+  const [timeLeft, setTimeLeft] = useState<number | null>(null);
+  const [showWarning, setShowWarning] = useState(false);
+  const [showSecurityWarning, setShowSecurityWarning] = useState(false);
+  const [isExpired, setIsExpired] = useState(false);
 
   const numberDigits = card.number.replace(/\D/g, "");
   const cvvLen = brand === "amex" ? 4 : 3;
+
+  // Timer para controle de expiração
+  useEffect(() => {
+    if (!checkoutResponse?.ttlSeconds || !checkoutResponse?.warningAt || !checkoutResponse?.securityWarningAt) {
+      return;
+    }
+
+    const ttlSeconds = checkoutResponse.ttlSeconds;
+    const warningAt = checkoutResponse.warningAt;
+    const securityWarningAt = checkoutResponse.securityWarningAt;
+
+    // Inicia o timer
+    setTimeLeft(ttlSeconds);
+
+    const interval = setInterval(() => {
+      setTimeLeft(prev => {
+        if (prev === null) return null;
+        
+        const newTime = prev - 1;
+        
+        // Aviso de segurança (30 segundos restantes)
+        if (newTime <= securityWarningAt && !showSecurityWarning) {
+          setShowSecurityWarning(true);
+        }
+        
+        // Aviso normal (60 segundos restantes)
+        if (newTime <= warningAt && !showWarning) {
+          setShowWarning(true);
+        }
+        
+        // Expiração
+        if (newTime <= 0) {
+          setIsExpired(true);
+          setShowWarning(false);
+          setShowSecurityWarning(false);
+          return 0;
+        }
+        
+        return newTime;
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [checkoutResponse, showWarning, showSecurityWarning]);
 
   // Warn if Efí fingerprint/script is blocked by extensions
   useEffect(() => {
@@ -270,8 +333,17 @@ export default function CardPaymentPage() {
   const holderDocument = (form.cpf ?? "").replace(/\D/g, "");
   const docOk = holderDocument.length >= 11;
 
+  // Validação considerando expiração
   const canPay =
-    !loading && luhnOk && holderOk && monthOk && yearOk && cvvOk && docOk && total > 0;
+    !loading && 
+    luhnOk && 
+    holderOk && 
+    monthOk && 
+    yearOk && 
+    cvvOk && 
+    docOk && 
+    total > 0 && 
+    !isExpired;
 
   const selectedInstallment = installmentOptions.find(
     (opt) => opt.installment === installments
@@ -281,6 +353,13 @@ export default function CardPaymentPage() {
     if (installments <= 1) return total;
     return Math.round((total / installments) * 100) / 100;
   }, [selectedInstallment, installments, total]);
+
+  // Função para formatar tempo restante
+  const formatTimeLeft = (seconds: number): string => {
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = seconds % 60;
+    return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+  };
 
   const handlePay = async () => {
     if (!canPay) return;
@@ -333,13 +412,8 @@ export default function CardPaymentPage() {
         throw new Error(txt || `HTTP ${res.status} while charging`);
       }
 
-      const data: {
-        success?: boolean;
-        message?: string;
-        orderId?: string;
-        chargeId?: string | null;
-        status?: string | null;
-      } = await res.json();
+      const data: CardCheckoutResponse = await res.json();
+      setCheckoutResponse(data);
 
       // Clear cart on success path
       cookieStorage.remove("cart");
@@ -376,6 +450,58 @@ export default function CardPaymentPage() {
   return (
     <div className="max-w-md mx-auto p-6">
       <h2 className="text-xl font-semibold mb-4 text-center">Pagamento com Cartão</h2>
+
+      {/* Aviso de expiração em 15 minutos */}
+      {checkoutResponse && !isExpired && (
+        <div className="bg-blue-50 text-blue-700 p-3 mb-4 rounded-lg border border-blue-200">
+          <div className="flex items-center">
+            <span className="text-lg mr-2">⏰</span>
+            <div>
+              <p className="font-medium">Pagamento expira em 15 minutos</p>
+              <p className="text-sm">Complete o pagamento antes do tempo expirar</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Aviso de 60 segundos restantes */}
+      {showWarning && !isExpired && (
+        <div className="bg-yellow-50 text-yellow-700 p-3 mb-4 rounded-lg border border-yellow-200">
+          <div className="flex items-center">
+            <span className="text-lg mr-2">⚠️</span>
+            <div>
+              <p className="font-medium">Atenção! Restam apenas {timeLeft && formatTimeLeft(timeLeft)}</p>
+              <p className="text-sm">Complete o pagamento rapidamente</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Aviso de segurança - 30 segundos restantes */}
+      {showSecurityWarning && !isExpired && (
+        <div className="bg-red-50 text-red-700 p-3 mb-4 rounded-lg border border-red-200">
+          <div className="flex items-center">
+            <span className="text-lg mr-2">🚨</span>
+            <div>
+              <p className="font-medium">Por questões de segurança, restam apenas {timeLeft && formatTimeLeft(timeLeft)}</p>
+              <p className="text-sm">Complete o pagamento agora ou será necessário reiniciar</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Pagamento expirado */}
+      {isExpired && (
+        <div className="bg-red-50 text-red-700 p-3 mb-4 rounded-lg border border-red-200">
+          <div className="flex items-center">
+            <span className="text-lg mr-2">❌</span>
+            <div>
+              <p className="font-medium">Pagamento expirado por questões de segurança</p>
+              <p className="text-sm">Por favor, reinicie o processo de pagamento</p>
+            </div>
+          </div>
+        </div>
+      )}
 
       <label className="block text-sm font-medium mb-1">Bandeira</label>
       <select value={brand} onChange={onChangeBrand} className="border p-2 w-full mb-4 rounded">
@@ -474,7 +600,7 @@ export default function CardPaymentPage() {
           canPay ? "hover:bg-blue-500" : "opacity-50 cursor-not-allowed"
         }`}
       >
-        {loading ? "Processando..." : "Pagar com Cartão"}
+        {loading ? "Processando..." : isExpired ? "Pagamento Expirado" : "Pagar com Cartão"}
       </button>
     </div>
   );

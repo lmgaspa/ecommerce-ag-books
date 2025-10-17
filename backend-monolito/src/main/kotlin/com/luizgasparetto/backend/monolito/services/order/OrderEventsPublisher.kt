@@ -19,7 +19,7 @@ class OrderEventsPublisher(
     private val listeners = ConcurrentHashMap<Long, CopyOnWriteArrayList<SseEmitter>>()
     private val heartbeats = ConcurrentHashMap<SseEmitter, ScheduledFuture<*>>()
 
-    fun subscribe(orderId: Long, timeoutMs: Long = 330_000L): SseEmitter {
+    fun subscribe(orderId: Long, timeoutMs: Long = 285_000L): SseEmitter {
         val emitter = SseEmitter(timeoutMs)
         val list = listeners.computeIfAbsent(orderId) { CopyOnWriteArrayList() }
         list += emitter

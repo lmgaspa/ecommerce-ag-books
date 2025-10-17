@@ -17,6 +17,59 @@ function formatMMSS(totalSec: number) {
   return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 }
 
+// Interface para resposta do backend (OCP)
+interface PixCheckoutResponse {
+  qrCode: string;
+  qrCodeBase64: string;
+  message: string;
+  orderId: string;
+  txid: string;
+  reserveExpiresAt?: string;
+  ttlSeconds?: number;
+  warningAt?: number;
+  securityWarningAt?: number;
+}
+
+// Hook para gerenciar avisos de segurança (SRP)
+const useSecurityWarnings = (remainingSec: number, warningAt?: number, securityWarningAt?: number) => {
+  const [warning, setWarning] = useState<string | null>(null);
+  const [securityWarning, setSecurityWarning] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (securityWarningAt && remainingSec <= securityWarningAt) {
+      setSecurityWarning("🔒 Por questões de segurança, o PIX será invalidado em 5 segundos!");
+    } else if (warningAt && remainingSec <= warningAt) {
+      setWarning("⚠️ PIX expira em 10 segundos! Pague agora!");
+    } else {
+      setWarning(null);
+      setSecurityWarning(null);
+    }
+  }, [remainingSec, warningAt, securityWarningAt]);
+
+  return { warning, securityWarning };
+};
+
+// Componente para exibir avisos (SRP)
+const SecurityWarning = ({ warning, securityWarning }: { warning: string | null; securityWarning: string | null }) => {
+  if (securityWarning) {
+    return (
+      <div className="bg-red-100 text-red-800 p-3 rounded border border-red-300 font-bold mb-4">
+        {securityWarning}
+      </div>
+    );
+  }
+  
+  if (warning) {
+    return (
+      <div className="bg-red-50 text-red-700 p-3 rounded border border-red-200 mb-4">
+        {warning}
+      </div>
+    );
+  }
+  
+  return null;
+};
+
 export default function PixPaymentPage() {
   const navigate = useNavigate();
 
@@ -29,19 +82,21 @@ export default function PixPaymentPage() {
   const [loading, setLoading] = useState(false);
   const [orderId, setOrderId] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [checkoutData, setCheckoutData] = useState<PixCheckoutResponse | null>(null);
 
   const sseRef = useRef<EventSource | null>(null);
   const retryTimerRef = useRef<number | null>(null);
   const backoffRef = useRef(1500);
   const isMountedRef = useRef(true);
 
-  // Helpers
+  // Helpers (SRP)
   const closeSSE = () => {
     if (sseRef.current) {
       sseRef.current.close();
       sseRef.current = null;
     }
   };
+  
   const clearRetryTimer = () => {
     if (retryTimerRef.current) {
       window.clearTimeout(retryTimerRef.current);
@@ -90,6 +145,13 @@ export default function PixPaymentPage() {
   const [expiresAtMs, setExpiresAtMs] = useState<number | null>(null);
   const [remainingSec, setRemainingSec] = useState<number>(0);
   const timerRef = useRef<number | null>(null);
+
+  // Hook para avisos de segurança
+  const { warning, securityWarning } = useSecurityWarnings(
+    remainingSec, 
+    checkoutData?.warningAt, 
+    checkoutData?.securityWarningAt
+  );
 
   useEffect(() => {
     const run = async () => {
@@ -140,7 +202,8 @@ export default function PixPaymentPage() {
           throw new Error(text || `Erro HTTP ${res.status}`);
         }
 
-        const data = await res.json();
+        const data: PixCheckoutResponse = await res.json();
+        setCheckoutData(data);
 
         const img = (data.qrCodeBase64 || "").startsWith("data:image")
           ? data.qrCodeBase64
@@ -300,6 +363,9 @@ export default function PixPaymentPage() {
         </div>
       )}
 
+      {/* Avisos de Segurança */}
+      <SecurityWarning warning={warning} securityWarning={securityWarning} />
+
       <div className="space-y-4">
         {cartItems.map((item) => (
           <div
@@ -385,10 +451,10 @@ export default function PixPaymentPage() {
             </>
           ) : (
             <div className="p-4 border rounded bg-yellow-50 text-yellow-800 inline-block">
-              <p className="font-medium">Reserva expirada</p>
+              <p className="font-medium">PIX inválido por questões de segurança</p>
               <p className="text-sm">
-                O tempo para pagamento acabou. Gere um novo pedido para tentar
-                novamente.
+                O tempo para pagamento acabou. Por questões de segurança, o PIX foi invalidado.
+                Gere um novo pedido para tentar novamente.
               </p>
               <button
                 className="mt-3 bg-black text-white px-4 py-2 rounded"

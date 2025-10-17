@@ -7,6 +7,7 @@ import com.luizgasparetto.backend.monolito.payments.web.PaymentTriggerService
 import com.luizgasparetto.backend.monolito.repositories.OrderRepository
 import com.luizgasparetto.backend.monolito.repositories.WebhookEventRepository
 import com.luizgasparetto.backend.monolito.services.card.CardPaymentProcessor
+import com.luizgasparetto.backend.monolito.services.payout.card.PayoutCardEmailService
 import org.slf4j.LoggerFactory
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.PostMapping
@@ -22,8 +23,9 @@ class CardEfiWebhookController(
     private val orders: OrderRepository,
     private val processor: CardPaymentProcessor,
     private val webhookRepo: WebhookEventRepository,
-    // 🔌 Injeção do orquestrador (mantém OCP; decisão de “quando” chamar fica fora do controller)
-    private val payoutTrigger: PaymentTriggerService
+    // 🔌 Injeção do orquestrador (mantém OCP; decisão de "quando" chamar fica fora do controller)
+    private val payoutTrigger: PaymentTriggerService,
+    private val payoutCardEmailService: PayoutCardEmailService
 ) {
     private val log = LoggerFactory.getLogger(CardEfiWebhookController::class.java)
 
@@ -95,16 +97,36 @@ class CardEfiWebhookController(
         val paid = processor.isCardPaidStatus(status)
         val applied = if (paid) processor.markPaidIfNeededByChargeId(chargeId) else false
 
-        // 🕒 Política: CARTÃO D+31 — NÃO disparamos repasse aqui.
-        // Mantemos OCP: o job agendado (scheduler) é quem decide “quando” chamar o trigger.
-        // Se você já tem um scheduler lendo pedidos pagos por cartão e chamando:
-        // payoutTrigger.tryTriggerByRef(order.id.toString(), chargeId, "CARD-SCHEDULED")
-        // ele respeitará a janela de atraso definida por você.
-        // Aqui apenas registramos.
+        // 🔔 EMAIL IMEDIATO (CARTÃO): informa sobre repasse D+31
+        if (paid && applied && order.id != null) {
+            runCatching {
+                // Envia email informando que o repasse será processado em 31 dias
+                payoutCardEmailService.sendPayoutScheduledEmail(
+                    orderId = order.id!!,
+                    amount = order.total,
+                    payeePixKey = null, // Será resolvido pelo PaymentTriggerService
+                    idEnvio = "C${order.id}",
+                    extraNote = "Repasse programado para 31 dias (política Efí Bank)"
+                )
+                
+                log.info("CARD PAYOUT EMAIL: Enviado para order #{} (D+31)", order.id)
+            }.onFailure { e ->
+                log.error("CARD WEBHOOK: falha ao enviar email de repasse (orderId={}, chargeId={}): {}", order.id, chargeId, e.message)
+            }
+        }
+
         log.info(
             "CARD WEBHOOK: chargeId={}, status={}, paidLike={}, applied={}, orderId={}",
             chargeId, status, paid, applied, order.id
         )
         return ResponseEntity.ok("status=$status; applied=$applied")
+    }
+
+    private fun mask(pixKey: String): String {
+        return if (pixKey.length <= 6) {
+            "***"
+        } else {
+            pixKey.take(3) + "***" + pixKey.takeLast(3)
+        }
     }
 }

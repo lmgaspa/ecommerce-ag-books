@@ -1,5 +1,5 @@
-// src/main/kotlin/com/luizgasparetto/backend/monolito/services/PayoutEmailService.kt
-package com.luizgasparetto.backend.monolito.services
+// src/main/kotlin/com/luizgasparetto/backend/monolito/services/payout/pix/PayoutPixEmailService.kt
+package com.luizgasparetto.backend.monolito.services.payout.pix
 
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
@@ -15,7 +15,7 @@ import java.time.Year
 import java.util.Locale
 
 @Service
-class PayoutEmailService(
+class PayoutPixEmailService(
     private val mailSender: JavaMailSender,
     @Value("\${email.author}") private val authorEmail: String,
     @Value("\${application.brand.name:Agenor Gasparetto - E-Commerce}") private val brandName: String,
@@ -25,7 +25,7 @@ class PayoutEmailService(
     // >>> CPF/Chave Pix do favorecido (global). Pode ser vazio; pode ser sobrescrito por parâmetro nos métodos.
     @Value("\${efi.payout.favored-key:}") private val favoredKeyFromConfig: String
 ) {
-    private val log = LoggerFactory.getLogger(PayoutEmailService::class.java)
+    private val log = LoggerFactory.getLogger(PayoutPixEmailService::class.java)
     private val fmtDateTime: DateTimeFormatter =
         DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm:ss", Locale("pt","BR"))
 
@@ -42,7 +42,7 @@ class PayoutEmailService(
         to: String = authorEmail               // pode sobrescrever para multi-autor
     ) {
         val key = (payeePixKey ?: favoredKeyFromConfig).orEmpty()
-        val subject = "✅ Repasse confirmado (#$orderId) — $brandName"
+        val subject = "✅ Repasse PIX confirmado (#$orderId) — $brandName"
         val html = buildHtml(
             success = true,
             orderId = orderId,
@@ -74,7 +74,7 @@ class PayoutEmailService(
         extraNote: String? = null
     ) {
         val key = (payeePixKey ?: favoredKeyFromConfig).orEmpty()
-        val subject = "❌ Repasse não realizado (#$orderId) — $brandName"
+        val subject = "❌ Repasse PIX não realizado (#$orderId) — $brandName"
         val html = buildHtml(
             success = false,
             orderId = orderId,
@@ -102,9 +102,9 @@ class PayoutEmailService(
         helper.setText(html, true)
         try {
             mailSender.send(msg)
-            log.info("MAIL Repasse enviado -> {}", to)
+            log.info("MAIL Repasse PIX enviado -> {}", to)
         } catch (e: Exception) {
-            log.error("MAIL Repasse ERRO para {}: {}", to, e.message, e)
+            log.error("MAIL Repasse PIX ERRO para {}: {}", to, e.message, e)
         }
     }
 
@@ -124,9 +124,9 @@ class PayoutEmailService(
     ): String {
         val valorFmt = "R$ %s".format(amount.setScale(2).toPlainString())
         val statusLine = if (success)
-            "<p style=\"margin:0 0 6px\">🎉 <strong>Repasse realizado com sucesso.</strong></p>"
+            "<p style=\"margin:0 0 6px\">🎉 <strong>Repasse PIX realizado com sucesso.</strong></p>"
         else
-            "<p style=\"margin:0 0 6px\">❌ <strong>Repasse não realizado.</strong></p>"
+            "<p style=\"margin:0 0 6px\">❌ <strong>Repasse PIX não realizado.</strong></p>"
 
         val cpfFmt = formatCpfIfPossible(payeePixKey)
         val favorecidoLine = if (cpfFmt != null)
@@ -148,7 +148,7 @@ class PayoutEmailService(
             """<p style="margin:10px 0 0"><strong>📝 Observação:</strong><br>${escape(it)}</p>"""
         } ?: ""
 
-        val subtitle = if (success) "Repasse confirmado" else "Repasse não realizado"
+        val subtitle = if (success) "Repasse PIX confirmado" else "Repasse PIX não realizado"
 
         return """
         <html>

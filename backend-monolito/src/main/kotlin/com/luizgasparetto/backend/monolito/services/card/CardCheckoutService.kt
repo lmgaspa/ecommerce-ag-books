@@ -32,6 +32,11 @@ class CardCheckoutService(
         // 0) valida estoque e total no servidor
         request.cartItems.forEach { item -> bookService.validateStock(item.id, item.quantity) }
         val totalAmount = calculateTotalAmount(request.shipping, request.cartItems)
+        
+        // 0.1) valida parcelas (1-6, sem juros)
+        if (request.installments < 1 || request.installments > 6) {
+            throw IllegalArgumentException("Parcelas deve ser entre 1 e 6 (sem juros)")
+        }
 
         val txid = "CARD-" + UUID.randomUUID().toString().replace("-", "").take(30)
 
@@ -108,13 +113,17 @@ class CardCheckoutService(
 
         if (result.paid && !fresh.chargeId.isNullOrBlank()) {
             processor.markPaidIfNeededByChargeId(fresh.chargeId!!)
-            return CardCheckoutResponse(
-                success = true,
-                message = "Pagamento aprovado.",
-                orderId = fresh.id.toString(),
-                chargeId = fresh.chargeId,
-                status = result.status
-            )
+        return CardCheckoutResponse(
+            success = true,
+            message = "Pagamento aprovado.",
+            orderId = fresh.id.toString(),
+            chargeId = fresh.chargeId,
+            status = result.status,
+            reserveExpiresAt = fresh.reserveExpiresAt?.toString(),
+            ttlSeconds = reserveTtlSeconds,
+            warningAt = 840, // Avisar quando faltar 60 segundos (15min - 1min)
+            securityWarningAt = 870 // Aviso de segurança quando faltar 30 segundos
+        )
         }
 
         // watcher opcional
@@ -130,7 +139,11 @@ class CardCheckoutService(
             message = "Pagamento em análise/processamento.",
             orderId = fresh.id.toString(),
             chargeId = fresh.chargeId,
-            status = result.status
+            status = result.status,
+            reserveExpiresAt = fresh.reserveExpiresAt?.toString(),
+            ttlSeconds = reserveTtlSeconds,
+            warningAt = 840, // Avisar quando faltar 60 segundos (15min - 1min)
+            securityWarningAt = 870 // Aviso de segurança quando faltar 30 segundos
         )
     }
 
