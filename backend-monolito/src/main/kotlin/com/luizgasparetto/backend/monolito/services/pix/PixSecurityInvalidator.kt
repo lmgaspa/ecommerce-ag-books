@@ -31,12 +31,15 @@ class PixSecurityInvalidator(
         }
 
         var invalidated = 0
+        var processed = 0
         expiredOrders.forEach { order ->
             // Só processa PIX (sem chargeId)
             val isPix = order.chargeId.isNullOrBlank() && 
                        order.paymentMethod.equals("pix", ignoreCase = true)
             
             if (!isPix) return@forEach
+
+            processed++ // Conta apenas os processados
 
             if (order.txid != null) {
                 // Cancela PIX na Efí por segurança
@@ -59,8 +62,6 @@ class PixSecurityInvalidator(
             orderRepository.save(order)
         }
 
-        if (invalidated > 0) {
-            log.info("PIX-SECURITY: {} PIX(s) invalidados por segurança", invalidated)
-        }
+        log.info("PIX-SECURITY: encontrados={}, processados={}, invalidados={}", expiredOrders.size, processed, invalidated)
     }
 }

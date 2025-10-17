@@ -26,11 +26,14 @@ class PixReservationReaper(
         if (expired.isEmpty()) return
 
         var released = 0
+        var processed = 0
         expired.forEach { order ->
             // Somente PIX: sem chargeId (cartão) e explicitamente "pix"
             val isPix = order.chargeId.isNullOrBlank() &&
                     order.paymentMethod.equals("pix", ignoreCase = true)
             if (!isPix) return@forEach
+
+            processed++ // Conta apenas os processados
 
             // 1) devolve estoque
             order.items.forEach { item ->
@@ -60,6 +63,6 @@ class PixReservationReaper(
             log.info("PIX-REAPER: reserva expirada orderId={} liberada", order.id)
         }
 
-        log.info("PIX-REAPER: expirados={}, unidadesDevolvidas={}", expired.size, released)
+        log.info("PIX-REAPER: encontrados={}, processados={}, unidadesDevolvidas={}", expired.size, processed, released)
     }
 }

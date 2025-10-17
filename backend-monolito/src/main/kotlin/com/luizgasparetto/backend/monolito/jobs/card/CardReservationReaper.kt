@@ -26,10 +26,16 @@ class CardReservationReaper(
         if (expired.isEmpty()) return
 
         var released = 0
+        var processed = 0
         for (order in expired) {
-            val chargeId = order.chargeId
             // só processa reservas de CARTÃO
-            if (chargeId.isNullOrBlank()) continue
+            val isCard = !order.chargeId.isNullOrBlank() && 
+                        order.paymentMethod.equals("card", ignoreCase = true)
+            if (!isCard) continue
+
+            processed++ // Conta apenas os processados
+
+            val chargeId = order.chargeId!!
 
             // 1) devolve estoque
             for (item in order.items) {
@@ -53,6 +59,6 @@ class CardReservationReaper(
             log.info("CARD-REAPER: reserva expirada orderId={} liberada", order.id)
         }
 
-        log.info("CARD-REAPER: pedidos expirados processados={}, unidades devolvidas={}", expired.size, released)
+        log.info("CARD-REAPER: encontrados={}, processados={}, unidades devolvidas={}", expired.size, processed, released)
     }
 }

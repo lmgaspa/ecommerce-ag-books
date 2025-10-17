@@ -31,6 +31,7 @@ interface PixCheckoutResponse {
 }
 
 // Hook para gerenciar avisos de segurança (SRP)
+// Hook para gerenciar avisos de segurança (SRP)
 const useSecurityWarnings = (remainingSec: number, warningAt?: number, securityWarningAt?: number) => {
   const [warning, setWarning] = useState<string | null>(null);
   const [securityWarning, setSecurityWarning] = useState<string | null>(null);

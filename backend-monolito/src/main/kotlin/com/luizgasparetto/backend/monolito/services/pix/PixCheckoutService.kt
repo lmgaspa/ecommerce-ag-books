@@ -22,7 +22,7 @@ class PixCheckoutService(
     private val pixWatcher: PixWatcher,
     private val pixService: PixService,
     @Value("\${efi.pix.chave}") private val chavePix: String,
-    @Value("\${checkout.reserve.ttl-seconds:900}") private val reserveTtlSeconds: Long
+    @Value("\${checkout.reserve.ttl-seconds:300}") private val reserveTtlSeconds: Long
 ) {
     private val log = LoggerFactory.getLogger(PixCheckoutService::class.java)
 
@@ -68,8 +68,8 @@ class PixCheckoutService(
             txid = txid,
             reserveExpiresAt = order.reserveExpiresAt?.toString(),
             ttlSeconds = reserveTtlSeconds,
-            warningAt = 290, // Avisar quando faltar 10 segundos
-            securityWarningAt = 295 // Aviso de segurança quando faltar 5 segundos
+            warningAt = 10, // Avisar quando faltar 10 segundos
+            securityWarningAt = 5 // Aviso de segurança quando faltar 5 segundos
         )
     }
 

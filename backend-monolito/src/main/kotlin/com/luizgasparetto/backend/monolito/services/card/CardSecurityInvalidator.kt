@@ -29,7 +29,16 @@ class CardSecurityInvalidator(
 
         log.info("CARD_INVALIDATOR: Encontradas {} reservas CARD expiradas para invalidar.", expiredOrders.size)
 
+        var processed = 0
         expiredOrders.forEach { order ->
+            // Só processa CARD (com chargeId)
+            val isCard = !order.chargeId.isNullOrBlank() && 
+                        order.paymentMethod.equals("card", ignoreCase = true)
+            
+            if (!isCard) return@forEach
+
+            processed++ // Conta apenas os processados
+
             if (order.chargeId != null) {
                 runCatching {
                     // Tenta cancelar a cobrança na Efí
@@ -52,6 +61,6 @@ class CardSecurityInvalidator(
                 log.warn("CARD_INVALIDATOR: Pedido orderId={} em WAITING sem chargeId para invalidar.", order.id)
             }
         }
-        log.info("CARD_INVALIDATOR: Concluída invalidação de {} reservas CARD expiradas.", expiredOrders.size)
+        log.info("CARD_INVALIDATOR: Concluída invalidação de {} reservas CARD expiradas (encontrados={}, processados={}).", processed, expiredOrders.size, processed)
     }
 }
