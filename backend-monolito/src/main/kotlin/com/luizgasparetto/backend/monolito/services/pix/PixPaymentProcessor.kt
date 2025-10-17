@@ -74,16 +74,15 @@ class PixPaymentProcessor(
                         result.minSend, result.pixKey?.let { mask(it) }
                     )
 
-                    // Se for ambiente stub, o PaymentTrigger já marca CONFIRMED;
-                    // aqui disparamos o e-mail de confirmado imediatamente.
-                    val isStubRef = result.providerRef?.startsWith("STUB-") == true
-                    if (isStubRef && result.orderId != null) {
+                    // Envia email de repasse confirmado imediatamente para PIX
+                    // (PIX é instantâneo, não precisa aguardar conciliação)
+                    if (result.orderId != null) {
                         safeSendConfirmedEmail(
                             orderId = result.orderId,
                             amount = result.amountNet ?: BigDecimal.ZERO,
                             payeePixKey = result.pixKey,
                             idEnvio = result.providerRef ?: "P${result.orderId}",
-                            note = "Confirmação automática (profile stub) via poller."
+                            note = "Repasse PIX confirmado automaticamente."
                         )
                     }
                 }
