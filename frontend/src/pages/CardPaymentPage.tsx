@@ -404,20 +404,30 @@ export default function CardPaymentPage() {
         reuse: false,
       });
 
+      const payload = {
+        ...form,
+        payment: "card",
+        paymentToken: tokenResp.payment_token,
+        installments,
+        cartItems: cart,
+        total: subtotal + shipping, // Total original SEM desconto
+        shipping,
+        discount: desconto,
+        couponCode: couponCode || null,
+      };
+      
+      console.log('🔍 DEBUG CARD PAYLOAD:');
+      console.log('Subtotal:', subtotal);
+      console.log('Shipping:', shipping);
+      console.log('Desconto:', desconto);
+      console.log('Total enviado (sem desconto):', payload.total);
+      console.log('Total final (com desconto):', total);
+      console.log('Payload completo:', payload);
+      
       const res = await fetch(`${API_BASE}/api/checkout/card`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...form,
-          payment: "card",
-          paymentToken: tokenResp.payment_token,
-          installments,
-          cartItems: cart,
-          total: subtotal + shipping, // Total original SEM desconto
-          shipping,
-          discount: desconto,
-          couponCode: couponCode || null,
-        }),
+        body: JSON.stringify(payload),
       });
 
       if (!res.ok) {

@@ -193,31 +193,41 @@ export default function PixPaymentPage() {
       setLoading(true);
       setErrorMsg(null);
       try {
+        const payload = {
+          firstName: form.firstName,
+          lastName: form.lastName,
+          cpf: form.cpf,
+          country: form.country,
+          cep: form.cep,
+          address: form.address,
+          number: form.number,
+          complement: form.complement,
+          district: form.district,
+          city: form.city,
+          state: form.state,
+          phone: form.phone,
+          email: form.email,
+          note: form.note,
+          payment: "pix",
+          shipping: frete,
+          cartItems,
+          total: totalProdutos + (frete ?? 0), // Total original SEM desconto
+          discount: desconto,
+          couponCode: couponCode || null,
+        };
+        
+        console.log('🔍 DEBUG PIX PAYLOAD:');
+        console.log('Total produtos:', totalProdutos);
+        console.log('Frete:', frete);
+        console.log('Desconto:', desconto);
+        console.log('Total enviado (sem desconto):', payload.total);
+        console.log('Total final (com desconto):', totalComFrete);
+        console.log('Payload completo:', payload);
+        
         const res = await fetch(`${API_BASE}/api/checkout/pix`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            firstName: form.firstName,
-            lastName: form.lastName,
-            cpf: form.cpf,
-            country: form.country,
-            cep: form.cep,
-            address: form.address,
-            number: form.number,
-            complement: form.complement,
-            district: form.district,
-            city: form.city,
-            state: form.state,
-            phone: form.phone,
-            email: form.email,
-            note: form.note,
-            payment: "pix",
-            shipping: frete,
-            cartItems,
-            total: totalProdutos + (frete ?? 0), // Total original SEM desconto
-            discount: desconto,
-            couponCode: couponCode || null,
-          }),
+          body: JSON.stringify(payload),
         });
 
         if (!res.ok) {
