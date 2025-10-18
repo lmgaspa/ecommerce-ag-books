@@ -3,7 +3,7 @@ import React from 'react';
 interface CouponInputProps {
   value: string;
   onChange: (value: string) => void;
-  onApply: (orderTotal: number) => Promise<boolean>;
+  onApply: (orderTotal: number) => Promise<{ success: boolean; discountAmount?: number }>;
   isValidating?: boolean;
   isValid?: boolean;
   discount?: number;
@@ -20,7 +20,8 @@ const CouponInput: React.FC<CouponInputProps> = ({
   const handleApply = async () => {
     // Para o CouponInput, vamos usar um orderTotal padrão
     // O componente pai deve passar o orderTotal correto
-    return await onApply(0);
+    const result = await onApply(0);
+    return result.success;
   };
 
   return (

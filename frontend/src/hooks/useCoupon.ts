@@ -48,10 +48,10 @@ export const useCoupon = () => {
     };
   }, []);
 
-  const applyCoupon = async (code: string, orderTotal: number): Promise<boolean> => {
+  const applyCoupon = async (code: string, orderTotal: number): Promise<{ success: boolean; discountAmount?: number }> => {
     if (!code.trim()) {
       alert("Digite um código de cupom.");
-      return false;
+      return { success: false };
     }
 
     setIsValidating(true);
@@ -70,7 +70,7 @@ export const useCoupon = () => {
         body: JSON.stringify({
           code: code.trim(),
           orderTotal: orderTotal,
-          userEmail: null // ou pegar do contexto do usuário
+          userEmail: null
         }),
       });
 
@@ -88,17 +88,55 @@ export const useCoupon = () => {
         sessionStorage.setItem(COUPON_STORAGE_KEY, JSON.stringify(newState));
         
         window.dispatchEvent(new CustomEvent('couponChanged'));
-        return true;
+        return { success: true, discountAmount: result.discountAmount };
       } else {
         alert(result.errorMessage || "Cupom inválido.");
-        return false;
+        return { success: false };
       }
     } catch (error) {
-      console.error('Erro ao validar cupom:', error);
-      alert("Erro ao validar cupom. Tente novamente.");
-      return false;
+      console.error('Erro ao validar cupom via API:', error);
+      
+      // Fallback para sistema local com variáveis de ambiente
+      return applyCouponLocal(code);
     } finally {
       setIsValidating(false);
+    }
+  };
+
+  const applyCouponLocal = (code: string): { success: boolean; discountAmount?: number } => {
+    // Verificar se as variáveis de ambiente estão configuradas
+    const couponCode = import.meta.env.VITE_COUPON_CODE;
+    const discountValue = import.meta.env.VITE_COUPON_DISCOUNT_VALUE;
+    
+    if (!couponCode || !discountValue) {
+      alert("Sistema de cupons não configurado. Entre em contato com o suporte.");
+      return { success: false };
+    }
+
+    const validCoupon = couponCode.toUpperCase();
+    const FIXED_DISCOUNT = Number(discountValue);
+
+    if (isNaN(FIXED_DISCOUNT) || FIXED_DISCOUNT <= 0) {
+      alert("Configuração de desconto inválida. Entre em contato com o suporte.");
+      return { success: false };
+    }
+
+    if (code.trim().toUpperCase() === validCoupon) {
+      const newState = {
+        code: code.trim().toUpperCase(),
+        discount: FIXED_DISCOUNT,
+        isValid: true,
+      };
+      
+      setCouponState(newState);
+      setInputValue(code.trim().toUpperCase());
+      sessionStorage.setItem(COUPON_STORAGE_KEY, JSON.stringify(newState));
+      
+      window.dispatchEvent(new CustomEvent('couponChanged'));
+      return { success: true, discountAmount: FIXED_DISCOUNT };
+    } else {
+      alert("Cupom inválido.");
+      return { success: false };
     }
   };
 

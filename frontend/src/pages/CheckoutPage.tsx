@@ -182,13 +182,12 @@ const CheckoutPage = () => {
     setTotalItems(updated.reduce((acc, it) => acc + it.price * it.quantity, 0));
   };
 
-  const handleApplyCoupon = async (): Promise<boolean> => {
-    const success = await applyCoupon(inputValue, totalItems);
-    if (success) {
-      const appliedDiscount = getDiscountAmount(totalItems);
-      alert(`Cupom aplicado com sucesso! Desconto de R$ ${appliedDiscount.toFixed(2)}`);
+  const handleApplyCoupon = async (): Promise<{ success: boolean; discountAmount?: number }> => {
+    const result = await applyCoupon(inputValue, totalItems);
+    if (result.success && result.discountAmount !== undefined) {
+      alert(`Cupom aplicado com sucesso! Desconto de R$ ${result.discountAmount.toFixed(2)}`);
     }
-    return success;
+    return result;
   };
 
   const handleChange = (

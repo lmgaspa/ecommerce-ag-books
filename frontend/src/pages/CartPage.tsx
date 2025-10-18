@@ -138,13 +138,12 @@ const CartPage = () => {
     calculateSubtotal(updatedItems);
   };
 
-  const handleApplyCoupon = async (): Promise<boolean> => {
-    const success = await applyCoupon(inputValue, subtotal);
-    if (success) {
-      const appliedDiscount = getDiscountAmount(subtotal);
-      alert(`Cupom aplicado com sucesso! Desconto de R$ ${appliedDiscount.toFixed(2)}`);
+  const handleApplyCoupon = async (): Promise<{ success: boolean; discountAmount?: number }> => {
+    const result = await applyCoupon(inputValue, subtotal);
+    if (result.success && result.discountAmount !== undefined) {
+      alert(`Cupom aplicado com sucesso! Desconto de R$ ${result.discountAmount.toFixed(2)}`);
     }
-    return success;
+    return result;
   };
 
   const handleCheckout = () => {
