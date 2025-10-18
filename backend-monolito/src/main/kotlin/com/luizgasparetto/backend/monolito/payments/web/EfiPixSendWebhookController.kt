@@ -9,14 +9,14 @@ import org.springframework.web.bind.annotation.*
 import java.math.BigDecimal
 
 @RestController
-@RequestMapping("/api/webhooks/efi/pix-send")
+@RequestMapping("/api/webhooks/payout")
 class EfiPixSendWebhookController(
     private val jdbc: NamedParameterJdbcTemplate,
     private val mail: PayoutPixEmailService
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
-    @PostMapping
+    @PostMapping("/pix")
     fun onSendWebhook(@RequestBody payload: Map<String, Any?>): ResponseEntity<Void> {
         // exemplos de campos possíveis: idEnvio, status (REALIZADO|NAO_REALIZADO), endToEndId, txid, valor
         val rawIdEnvio = (payload["idEnvio"] ?: payload["id_envio"])?.toString()

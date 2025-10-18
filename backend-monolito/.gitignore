@@ -38,3 +38,11 @@ out/
 
 ### Kotlin ###
 .kotlin
+
+# === Dev/Secrets (não commitar) ===
+env-dev.ps1
+*.env
+.env
+.env.*
+*.ps1.local
+*.sh.local

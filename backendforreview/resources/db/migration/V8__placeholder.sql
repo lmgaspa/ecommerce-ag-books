@@ -1,0 +1,3 @@
+-- Migration placeholder para V8
+-- Esta migration foi aplicada no banco mas o arquivo original foi removido
+-- Criado para resolver conflito de validação do Flyway

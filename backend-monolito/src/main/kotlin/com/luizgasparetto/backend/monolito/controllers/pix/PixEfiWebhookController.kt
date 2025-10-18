@@ -19,7 +19,7 @@ import org.springframework.web.bind.annotation.RestController
 import java.time.OffsetDateTime
 
 @RestController
-@RequestMapping("/api/efi-webhook")
+@RequestMapping("/api/webhooks/payment")
 class PixEfiWebhookController(
     private val orderRepository: OrderRepository,
     private val emailService: PixEmailService,
@@ -31,7 +31,7 @@ class PixEfiWebhookController(
 ) {
     private val log = LoggerFactory.getLogger(PixEfiWebhookController::class.java)
 
-    @PostMapping(consumes = ["application/json"])
+    @PostMapping("/pix", consumes = ["application/json"])
     @Transactional
     fun handle(@RequestBody rawBody: String): ResponseEntity<String> {
         log.info("EFI WEBHOOK RAW={}", rawBody.take(5000))
@@ -129,7 +129,4 @@ class PixEfiWebhookController(
             ResponseEntity.ok("⚠️ Pago após expiração; pedido cancelado/estorno")
         }
     }
-
-    @PostMapping("/pix", consumes = ["application/json"])
-    fun handlePix(@RequestBody rawBody: String): ResponseEntity<String> = handle(rawBody)
 }

@@ -54,8 +54,8 @@ class PaymentWebhookController(
         return ResponseEntity.ok(mapOf("ok" to true))
     }
 
-    // Rota extra para compat /alias (se existir no seu projeto)
-    @PostMapping("/pix/pix", consumes = [MediaType.APPLICATION_JSON_VALUE], produces = [MediaType.APPLICATION_JSON_VALUE])
-    fun onPixAlias(@RequestBody payload: Map<String, Any?>): ResponseEntity<Map<String, Any?>> =
+    // Webhook de repasse PIX (payout)
+    @PostMapping("/payout/pix", consumes = [MediaType.APPLICATION_JSON_VALUE], produces = [MediaType.APPLICATION_JSON_VALUE])
+    fun onPixPayout(@RequestBody payload: Map<String, Any?>): ResponseEntity<Map<String, Any?>> =
         onPix(payload)
 }

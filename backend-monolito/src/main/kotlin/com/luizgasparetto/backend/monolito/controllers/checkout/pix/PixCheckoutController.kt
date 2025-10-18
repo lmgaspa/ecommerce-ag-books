@@ -10,7 +10,7 @@ import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
 
 @RestController
-@RequestMapping("/api/checkout")
+@RequestMapping("/api/checkout/pix")
 class PixCheckoutController(
     private val checkoutService: PixCheckoutService
 ) {

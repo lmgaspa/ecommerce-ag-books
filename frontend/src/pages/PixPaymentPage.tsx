@@ -193,7 +193,7 @@ export default function PixPaymentPage() {
       setLoading(true);
       setErrorMsg(null);
       try {
-        const res = await fetch(`${API_BASE}/api/checkout`, {
+        const res = await fetch(`${API_BASE}/api/checkout/pix`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({

@@ -17,7 +17,7 @@ import org.springframework.web.bind.annotation.RestController
 import java.time.OffsetDateTime
 
 @RestController
-@RequestMapping("/api/efi-webhook/card")
+@RequestMapping("/api/webhooks/payment")
 class CardEfiWebhookController(
     private val mapper: ObjectMapper,
     private val orders: OrderRepository,
@@ -29,7 +29,7 @@ class CardEfiWebhookController(
 ) {
     private val log = LoggerFactory.getLogger(CardEfiWebhookController::class.java)
 
-    @PostMapping(consumes = ["application/json"])
+    @PostMapping("/card", consumes = ["application/json"])
     fun handle(@RequestBody rawBody: String): ResponseEntity<String> {
         log.info("EFI CARD WEBHOOK RAW={}", rawBody.take(4000))
 
