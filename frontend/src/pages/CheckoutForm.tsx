@@ -10,7 +10,7 @@ interface CheckoutFormProps {
   discount: number;
   coupon: string;
   setCoupon: (coupon: string) => void;
-  handleApplyCoupon: () => void;
+  handleApplyCoupon: () => Promise<boolean>;
   couponValid: boolean;
   couponDiscount: number;
   isValidating?: boolean;

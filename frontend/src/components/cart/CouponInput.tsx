@@ -20,7 +20,7 @@ const CouponInput: React.FC<CouponInputProps> = ({
   const handleApply = async () => {
     // Para o CouponInput, vamos usar um orderTotal padrão
     // O componente pai deve passar o orderTotal correto
-    await onApply(0);
+    return await onApply(0);
   };
 
   return (

@@ -103,7 +103,7 @@ const CheckoutPage = () => {
         alert("Atualizamos seu carrinho de acordo com o estoque atual.");
       }
     })();
-  }, []);
+  }, [getCart]);
 
   const cpfCepInfo = useMemo(() => {
     const cpf = form.cpf.replace(/\D/g, "");
@@ -182,12 +182,13 @@ const CheckoutPage = () => {
     setTotalItems(updated.reduce((acc, it) => acc + it.price * it.quantity, 0));
   };
 
-  const handleApplyCoupon = async () => {
+  const handleApplyCoupon = async (): Promise<boolean> => {
     const success = await applyCoupon(inputValue, totalItems);
     if (success) {
       const appliedDiscount = getDiscountAmount(totalItems);
       alert(`Cupom aplicado com sucesso! Desconto de R$ ${appliedDiscount.toFixed(2)}`);
     }
+    return success;
   };
 
   const handleChange = (
