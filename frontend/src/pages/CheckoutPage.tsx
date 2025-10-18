@@ -1,5 +1,5 @@
 // src/pages/CheckoutPage.tsx
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useCart } from "../hooks/useCart";
 import { useCoupon } from "../hooks/useCoupon";
@@ -73,7 +73,12 @@ const CheckoutPage = () => {
 
   const onNavigateBack = () => navigate("/books");
 
+  const initializedRef = useRef(false);
+  
   const initializeCart = useCallback(async () => {
+    if (initializedRef.current) return; // Evitar múltiplas inicializações
+    initializedRef.current = true;
+    
     const cart = getCart();
     const ids = cart.map((c) => c.id);
     const stockMap = await getStockByIds(ids);
@@ -114,47 +119,68 @@ const CheckoutPage = () => {
     return { cpf, cep, phone };
   }, [form]);
 
-  // Calcula frete e envia GA4: add_shipping_info
+  const cartItemsRef = useRef<CartItem[]>([]);
+  
+  // Atualizar ref quando cartItems mudar
   useEffect(() => {
+    cartItemsRef.current = cartItems;
+  }, [cartItems]);
+
+  // Função estabilizada para calcular frete
+  const calcularFrete = useCallback(async () => {
+    const currentCartItems = cartItemsRef.current;
+    
     if (
       cpfCepInfo.cpf === "00000000000" ||
       cpfCepInfo.cep.length !== 8 ||
-      cartItems.length === 0
+      currentCartItems.length === 0
     ) {
       setShipping(0);
       return;
     }
 
-    calcularFreteComBaseEmCarrinho(
-      { cpf: cpfCepInfo.cpf, cep: cpfCepInfo.cep },
-      cartItems
-    )
-      .then((v) => {
-        setShipping(v);
+    try {
+      const v = await calcularFreteComBaseEmCarrinho(
+        { cpf: cpfCepInfo.cpf, cep: cpfCepInfo.cep },
+        currentCartItems
+      );
+      
+      setShipping(v);
 
-        // GA4: add_shipping_info (OCP)
-        try {
-          const itemsPayload = mapCartItems(cartItems);
-          const orderValue = cartItems.reduce(
-            (acc, i) => acc + i.price * i.quantity,
-            0
-          );
-          analytics.addShippingInfo({
-            items: itemsPayload,
-            value: Number(orderValue + v),
-            shipping: Number(v),
-            shipping_tier: "default",
-            currency: "BRL",
-          });
-        } catch {
-          // no-op
-        }
-      })
-      .catch(() => setShipping(0));
-  }, [cpfCepInfo, cartItems]);
+      // GA4: add_shipping_info (OCP)
+      try {
+        const itemsPayload = mapCartItems(currentCartItems);
+        const orderValue = currentCartItems.reduce(
+          (acc, i) => acc + i.price * i.quantity,
+          0
+        );
+        analytics.addShippingInfo({
+          items: itemsPayload,
+          value: Number(orderValue + v),
+          shipping: Number(v),
+          shipping_tier: "default",
+          currency: "BRL",
+        });
+      } catch {
+        // no-op
+      }
+    } catch {
+      setShipping(0);
+    }
+  }, [cpfCepInfo]);
 
+  // Calcula frete e envia GA4: add_shipping_info
   useEffect(() => {
-    cookieStorage.set("checkoutForm", { ...form, shipping });
+    calcularFrete();
+  }, [calcularFrete]);
+
+  // Salvar formulário no cookie (sem causar loop)
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      cookieStorage.set("checkoutForm", { ...form, shipping });
+    }, 100); // Debounce para evitar loops
+    
+    return () => clearTimeout(timeoutId);
   }, [form, shipping]);
 
   const updateQuantity = useCallback((id: string, delta: number) => {
