@@ -1,5 +1,5 @@
 // src/pages/CheckoutPage.tsx
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useCart } from "../hooks/useCart";
 import { useCoupon } from "../hooks/useCoupon";
@@ -73,37 +73,39 @@ const CheckoutPage = () => {
 
   const onNavigateBack = () => navigate("/books");
 
-  useEffect(() => {
+  const initializeCart = useCallback(async () => {
     const cart = getCart();
-    (async () => {
-      const ids = cart.map((c) => c.id);
-      const stockMap = await getStockByIds(ids);
-      const stockDict = Object.fromEntries(
-        ids.map((id) => [id, Math.max(0, stockMap[id]?.stock ?? 0)])
-      );
-      setStockById(stockDict);
+    const ids = cart.map((c) => c.id);
+    const stockMap = await getStockByIds(ids);
+    const stockDict = Object.fromEntries(
+      ids.map((id) => [id, Math.max(0, stockMap[id]?.stock ?? 0)])
+    );
+    setStockById(stockDict);
 
-      const fixed = cart
-        .map((i) => ({
-          ...i,
-          quantity: Math.min(i.quantity, Math.max(0, stockDict[i.id] ?? 0)),
-        }))
-        .filter((i) => i.quantity > 0);
+    const fixed = cart
+      .map((i) => ({
+        ...i,
+        quantity: Math.min(i.quantity, Math.max(0, stockDict[i.id] ?? 0)),
+      }))
+      .filter((i) => i.quantity > 0);
 
-      const sum = fixed.reduce((acc, item) => acc + item.price * item.quantity, 0);
+    const sum = fixed.reduce((acc, item) => acc + item.price * item.quantity, 0);
 
-      setCartItems(fixed);
-      setTotalItems(sum);
-      cookieStorage.set("cart", fixed);
+    setCartItems(fixed);
+    setTotalItems(sum);
+    cookieStorage.set("cart", fixed);
 
-      if (
-        fixed.length !== cart.length ||
-        JSON.stringify(fixed) !== JSON.stringify(cart)
-      ) {
-        alert("Atualizamos seu carrinho de acordo com o estoque atual.");
-      }
-    })();
+    if (
+      fixed.length !== cart.length ||
+      JSON.stringify(fixed) !== JSON.stringify(cart)
+    ) {
+      alert("Atualizamos seu carrinho de acordo com o estoque atual.");
+    }
   }, [getCart]);
+
+  useEffect(() => {
+    initializeCart();
+  }, [initializeCart]);
 
   const cpfCepInfo = useMemo(() => {
     const cpf = form.cpf.replace(/\D/g, "");
@@ -155,32 +157,47 @@ const CheckoutPage = () => {
     cookieStorage.set("checkoutForm", { ...form, shipping });
   }, [form, shipping]);
 
-  const updateQuantity = (id: string, delta: number) => {
-    const updated = cartItems
-      .map((item) => {
-        if (item.id !== id) return item;
-        const max = stockById[id] ?? Infinity;
-        const next = item.quantity + delta;
-        if (next > max) {
-          alert("Quantidade excede o estoque disponível.");
-          return item;
-        }
-        if (next <= 0) return null;
-        return { ...item, quantity: next };
-      })
-      .filter(Boolean) as CartItem[];
+  const updateQuantity = useCallback((id: string, delta: number) => {
+    setCartItems(prevItems => {
+      const updated = prevItems
+        .map((item) => {
+          if (item.id !== id) return item;
+          const max = stockById[id] ?? Infinity;
+          const next = item.quantity + delta;
+          if (next > max) {
+            alert("Quantidade excede o estoque disponível.");
+            return item;
+          }
+          if (next <= 0) return null;
+          return { ...item, quantity: next };
+        })
+        .filter(Boolean) as CartItem[];
 
-    setCartItems(updated);
-    cookieStorage.set("cart", updated);
-    setTotalItems(updated.reduce((acc, it) => acc + it.price * it.quantity, 0));
-  };
+      // Atualizar totalItems baseado nos novos items
+      const newTotal = updated.reduce((acc, it) => acc + it.price * it.quantity, 0);
+      setTotalItems(newTotal);
+      
+      // Salvar no cookie
+      cookieStorage.set("cart", updated);
+      
+      return updated;
+    });
+  }, [stockById]);
 
-  const removeItem = (id: string) => {
-    const updated = cartItems.filter((i) => i.id !== id);
-    setCartItems(updated);
-    cookieStorage.set("cart", updated);
-    setTotalItems(updated.reduce((acc, it) => acc + it.price * it.quantity, 0));
-  };
+  const removeItem = useCallback((id: string) => {
+    setCartItems(prevItems => {
+      const updated = prevItems.filter((i) => i.id !== id);
+      
+      // Atualizar totalItems baseado nos novos items
+      const newTotal = updated.reduce((acc, it) => acc + it.price * it.quantity, 0);
+      setTotalItems(newTotal);
+      
+      // Salvar no cookie
+      cookieStorage.set("cart", updated);
+      
+      return updated;
+    });
+  }, []);
 
   const handleApplyCoupon = async (): Promise<{ success: boolean; discountAmount?: number }> => {
     const result = await applyCoupon(inputValue, totalItems);
