@@ -27,5 +27,6 @@ data class PixCheckoutRequest(
     val total: Double,                    // conferido no servidor
     
     // Cupom de desconto
-    val couponCode: String? = null
+    val couponCode: String? = null,
+    val discount: Double? = null              // Desconto calculado pelo frontend
 )

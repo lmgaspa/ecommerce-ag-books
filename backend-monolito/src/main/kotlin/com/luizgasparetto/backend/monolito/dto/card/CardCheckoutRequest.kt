@@ -38,5 +38,6 @@ data class CardCheckoutRequest(
     val installments: Int = 1,            // parcelas (1-6, sem juros)
     
     // Cupom de desconto
-    val couponCode: String? = null
+    val couponCode: String? = null,
+    val discount: Double? = null              // Desconto calculado pelo frontend
 )

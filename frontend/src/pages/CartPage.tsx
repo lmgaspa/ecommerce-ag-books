@@ -28,7 +28,6 @@ const CartPage = () => {
     applyCoupon, 
     getDiscountAmount, 
     isValid: couponValid, 
-    discount: couponDiscount, 
     inputValue, 
     setInputValue,
     isValidating
@@ -141,8 +140,9 @@ const CartPage = () => {
   const handleApplyCoupon = async (): Promise<{ success: boolean; discountAmount?: number }> => {
     const result = await applyCoupon(inputValue, subtotal);
     if (result.success && result.discountAmount !== undefined) {
-      // Usar o valor real aplicado pelo frontend (limitado a R$ 15)
-      const actualDiscount = getDiscountAmount(subtotal);
+      // Usar o valor retornado pela API, mas limitado a R$ 15
+      const maxDiscount = 15.00;
+      const actualDiscount = Math.min(result.discountAmount, maxDiscount);
       alert(`Cupom aplicado com sucesso! Desconto de R$ ${actualDiscount.toFixed(2)}`);
     }
     return result;
@@ -170,11 +170,11 @@ const CartPage = () => {
                 onApply={handleApplyCoupon}
                 isValidating={isValidating}
                 isValid={couponValid}
-                discount={couponDiscount}
+                discount={getDiscountAmount(subtotal)}
               />
               {couponValid && (
                 <div className="text-green-600 text-sm mt-2">
-                  ✓ Cupom {couponDiscount > 0 ? `${couponDiscount.toFixed(2).replace(".", ",")}` : ''} aplicado
+                  ✓ Cupom {getDiscountAmount(subtotal) > 0 ? `${getDiscountAmount(subtotal).toFixed(2).replace(".", ",")}` : ''} aplicado
                 </div>
               )}
             </div>

@@ -35,19 +35,17 @@ class PixCheckoutService(
         // 0) valida disponibilidade (checagem rápida)
         request.cartItems.forEach { item -> bookService.validateStock(item.id, item.quantity) }
 
-        // 0.1) calcula total original e valida cupom se fornecido
+        // 0.1) calcula total original e processa desconto
         val originalTotal = calculateOriginalTotal(request)
-        val couponValidation = validateCouponIfProvided(request, originalTotal)
-        val finalTotal = couponValidation.finalTotal
-        val discountAmount = couponValidation.discountAmount
+        val (finalTotal, discountAmount) = processDiscount(request, originalTotal)
         
         // Log detalhado para debug
         log.info("📦 CHECKOUT PIX - Dados recebidos:")
         log.info("  - Total do request: {}", request.total)
         log.info("  - Shipping: {}", request.shipping)
         log.info("  - CouponCode: {}", request.couponCode)
+        log.info("  - Discount (frontend): {}", request.discount)
         log.info("  - Total calculado (original): {}", originalTotal)
-        log.info("  - Cupom válido: {}", couponValidation.valid)
         log.info("  - Desconto aplicado: {}", discountAmount)
         log.info("  - Total final: {}", finalTotal)
         
@@ -106,22 +104,50 @@ class PixCheckoutService(
         return totalBooks + request.shipping.toBigDecimal()
     }
 
-    private fun validateCouponIfProvided(request: PixCheckoutRequest, originalTotal: BigDecimal): CouponService.CouponValidationResult {
+    private fun processDiscount(request: PixCheckoutRequest, originalTotal: BigDecimal): Pair<BigDecimal, BigDecimal> {
+        // Se não há cupom, não há desconto
         if (request.couponCode.isNullOrBlank()) {
-            return CouponService.CouponValidationResult(
-                valid = true,
-                finalTotal = originalTotal,
-                discountAmount = BigDecimal.ZERO
-            )
+            return Pair(originalTotal, BigDecimal.ZERO)
         }
 
-        return couponService.validateCoupon(
+        // Validar cupom primeiro
+        val couponValidation = couponService.validateCoupon(
             CouponService.CouponValidationRequest(
                 code = request.couponCode,
                 orderTotal = originalTotal,
                 userEmail = request.email
             )
         )
+
+        if (!couponValidation.valid) {
+            log.warn("Cupom inválido: {} - {}", request.couponCode, couponValidation.errorMessage)
+            return Pair(originalTotal, BigDecimal.ZERO)
+        }
+
+        // Usar o desconto enviado pelo frontend se disponível
+        val frontendDiscount = request.discount?.toBigDecimal() ?: BigDecimal.ZERO
+        val calculatedDiscount = couponValidation.discountAmount
+
+        // Aplicar o menor desconto entre frontend e calculado
+        val finalDiscount = if (frontendDiscount > BigDecimal.ZERO) {
+            minOf(frontendDiscount, calculatedDiscount)
+        } else {
+            calculatedDiscount
+        }
+
+        // Garantir que o desconto não seja maior que o total
+        val maxAllowedDiscount = originalTotal - BigDecimal("0.01")
+        val limitedDiscount = minOf(finalDiscount, maxAllowedDiscount)
+
+        val finalTotal = originalTotal - limitedDiscount
+
+        log.info("💳 PROCESSAMENTO DESCONTO:")
+        log.info("  - Desconto frontend: {}", frontendDiscount)
+        log.info("  - Desconto calculado: {}", calculatedDiscount)
+        log.info("  - Desconto final: {}", limitedDiscount)
+        log.info("  - Total final: {}", finalTotal)
+
+        return Pair(finalTotal, limitedDiscount)
     }
 
     @Transactional
