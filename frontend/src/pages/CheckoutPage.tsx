@@ -68,7 +68,10 @@ const CheckoutPage = () => {
   const [form, setForm] = useState<FormState>(() =>
     cookieStorage.get<FormState>("checkoutForm", DEFAULT_FORM)
   );
-  const [shipping, setShipping] = useState(() => form.shipping ?? 0);
+  const [shipping, setShipping] = useState(() => {
+    const savedForm = cookieStorage.get<FormState>("checkoutForm", DEFAULT_FORM);
+    return savedForm.shipping ?? 0;
+  });
 
   const onNavigateBack = () => navigate("/books");
 
@@ -135,6 +138,12 @@ const CheckoutPage = () => {
   // Função estabilizada para calcular frete
   const calcularFrete = useCallback(async () => {
     const currentCartItems = cartItemsRef.current;
+    
+    // Se já temos um frete válido salvo, usar ele
+    if (form.shipping && form.shipping > 0) {
+      setShipping(form.shipping);
+      return;
+    }
     
     if (
       cpfCepInfo.cpf === "00000000000" ||
@@ -239,8 +248,9 @@ const CheckoutPage = () => {
   const handleApplyCoupon = async (): Promise<{ success: boolean; discountAmount?: number }> => {
     const result = await applyCoupon(inputValue, totalItems);
     if (result.success && result.discountAmount !== undefined) {
-      // Usar o valor real aplicado pelo frontend (limitado a R$ 15)
-      const actualDiscount = getDiscountAmount(totalItems);
+      // Usar o valor retornado pela API, mas limitado a R$ 15
+      const maxDiscount = 15.00;
+      const actualDiscount = Math.min(result.discountAmount, maxDiscount);
       alert(`Cupom aplicado com sucesso! Desconto de R$ ${actualDiscount.toFixed(2)}`);
     }
     return result;
