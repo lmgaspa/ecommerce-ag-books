@@ -31,9 +31,15 @@ class CardSecurityInvalidator(
 
         var processed = 0
         expiredOrders.forEach { order ->
+            // DEBUG: Log dos valores reais para identificar o problema
+            log.debug("CARD_INVALIDATOR: Analisando pedido orderId={}, paymentMethod='{}', chargeId='{}'", 
+                order.id, order.paymentMethod, order.chargeId)
+            
             // Só processa CARD (com chargeId)
             val isCard = !order.chargeId.isNullOrBlank() && 
                         order.paymentMethod.equals("card", ignoreCase = true)
+            
+            log.debug("CARD_INVALIDATOR: isCard={} para orderId={}", isCard, order.id)
             
             if (!isCard) return@forEach
 

@@ -131,17 +131,31 @@ const CartPage = () => {
   };
 
   const handleApplyCoupon = () => {
-  const validCoupon = (import.meta.env.VITE_COUPON_CODE || "DESCONTO10").toUpperCase();
-  const FIXED_DISCOUNT = Number(import.meta.env.VITE_COUPON_DISCOUNT_VALUE ?? 18); // opcional via .env
+    // Verificar se as variáveis de ambiente estão configuradas
+    const couponCode = import.meta.env.VITE_COUPON_CODE;
+    const discountValue = import.meta.env.VITE_COUPON_DISCOUNT_VALUE;
+    
+    if (!couponCode || !discountValue) {
+      alert("Sistema de cupons não configurado. Entre em contato com o suporte.");
+      return;
+    }
 
-  if (coupon.trim().toUpperCase() === validCoupon) {
-    const discountValue = Math.min(FIXED_DISCOUNT, Number(subtotal) || 0);
-    setDiscount(discountValue);
-    alert(`Cupom aplicado com sucesso! Desconto de R$ ${discountValue.toFixed(2)}`);
-  } else {
-    alert("Cupom inválido.");
-  }
-};
+    const validCoupon = couponCode.toUpperCase();
+    const FIXED_DISCOUNT = Number(discountValue);
+
+    if (isNaN(FIXED_DISCOUNT) || FIXED_DISCOUNT <= 0) {
+      alert("Configuração de desconto inválida. Entre em contato com o suporte.");
+      return;
+    }
+
+    if (coupon.trim().toUpperCase() === validCoupon) {
+      const appliedDiscount = Math.min(FIXED_DISCOUNT, Number(subtotal) || 0);
+      setDiscount(appliedDiscount);
+      alert(`Cupom aplicado com sucesso! Desconto de R$ ${appliedDiscount.toFixed(2)}`);
+    } else {
+      alert("Cupom inválido.");
+    }
+  };
 
   const handleCheckout = () => {
     alert("Finalizando compra...");

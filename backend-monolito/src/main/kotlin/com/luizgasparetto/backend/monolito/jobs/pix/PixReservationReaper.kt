@@ -28,9 +28,16 @@ class PixReservationReaper(
         var released = 0
         var processed = 0
         expired.forEach { order ->
+            // DEBUG: Log dos valores reais para identificar o problema
+            log.debug("PIX-REAPER: Analisando pedido orderId={}, paymentMethod='{}', chargeId='{}', txid='{}'", 
+                order.id, order.paymentMethod, order.chargeId, order.txid)
+            
             // Somente PIX: sem chargeId (cartão) e explicitamente "pix"
             val isPix = order.chargeId.isNullOrBlank() &&
                     order.paymentMethod.equals("pix", ignoreCase = true)
+            
+            log.debug("PIX-REAPER: isPix={} para orderId={}", isPix, order.id)
+            
             if (!isPix) return@forEach
 
             processed++ // Conta apenas os processados

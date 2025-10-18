@@ -28,9 +28,16 @@ class CardReservationReaper(
         var released = 0
         var processed = 0
         for (order in expired) {
+            // DEBUG: Log dos valores reais para identificar o problema
+            log.debug("CARD-REAPER: Analisando pedido orderId={}, paymentMethod='{}', chargeId='{}'", 
+                order.id, order.paymentMethod, order.chargeId)
+            
             // só processa reservas de CARTÃO
             val isCard = !order.chargeId.isNullOrBlank() && 
                         order.paymentMethod.equals("card", ignoreCase = true)
+            
+            log.debug("CARD-REAPER: isCard={} para orderId={}", isCard, order.id)
+            
             if (!isCard) continue
 
             processed++ // Conta apenas os processados
