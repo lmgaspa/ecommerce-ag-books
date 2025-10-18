@@ -83,6 +83,14 @@ class CouponService(
             val discountAmount = coupon.calculateDiscount(request.orderTotal)
             val finalTotal = request.orderTotal - discountAmount
 
+            // Validação de segurança: garantir que o total final seja sempre >= 0.01
+            if (finalTotal < BigDecimal("0.01")) {
+                return CouponValidationResult(
+                    valid = false,
+                    errorMessage = "Desconto muito alto. Valor mínimo do pedido deve ser R$ 0,01"
+                )
+            }
+
             log.info("Coupon validated successfully: code={}, discount={}, finalTotal={}", 
                 request.code, discountAmount, finalTotal)
 

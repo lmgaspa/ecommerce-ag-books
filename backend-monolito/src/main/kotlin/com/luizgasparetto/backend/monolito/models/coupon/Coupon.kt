@@ -89,7 +89,9 @@ data class Coupon(
         }
 
         // O desconto não pode ser maior que o total do pedido
-        return discount.min(orderTotal)
+        // Garantir que sempre reste pelo menos R$ 0.01
+        val maxAllowedDiscount = orderTotal - BigDecimal("0.01")
+        return discount.min(maxAllowedDiscount)
     }
 }
 

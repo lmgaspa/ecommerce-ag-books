@@ -17,6 +17,7 @@ import java.util.Locale
 @Service
 class PayoutPixEmailService(
     private val mailSender: JavaMailSender,
+    private val orderRepository: com.luizgasparetto.backend.monolito.repositories.OrderRepository,
     @Value("\${email.author}") private val authorEmail: String,
     @Value("\${application.brand.name:Agenor Gasparetto - E-Commerce}") private val brandName: String,
     @Value("\${mail.from:}") private val configuredFrom: String,
@@ -148,6 +149,28 @@ class PayoutPixEmailService(
             """<p style="margin:10px 0 0"><strong>📝 Observação:</strong><br>${escape(it)}</p>"""
         } ?: ""
 
+        // Buscar informações do cupom do pedido
+        val couponBlock = try {
+            val order = orderRepository.findById(orderId).orElse(null)
+            if (order?.couponCode != null && order.discountAmount != null && order.discountAmount!! > java.math.BigDecimal.ZERO) {
+                val couponCode = order.couponCode!!
+                val discountAmount = order.discountAmount!!
+                val discountFormatted = "R$ %.2f".format(discountAmount.toDouble())
+                """
+                <!-- CUPOM UTILIZADO NO PEDIDO -->
+                <div style="background:#fff3cd;border:1px solid #ffeaa7;border-radius:8px;padding:16px;margin:16px 0;text-align:center;">
+                  <div style="color:#856404;font-size:24px;margin-bottom:8px;">🎫</div>
+                  <div style="font-weight:700;color:#856404;font-size:16px;margin-bottom:4px;">CUPOM UTILIZADO</div>
+                  <div style="font-weight:600;color:#856404;font-size:14px;margin-bottom:8px;">Código: ${escape(couponCode)}</div>
+                  <div style="font-weight:700;color:#856404;font-size:18px;">Pagamento reduzido em $discountFormatted</div>
+                </div>
+                """.trimIndent()
+            } else ""
+        } catch (e: Exception) {
+            log.warn("Erro ao buscar informações do cupom para pedido $orderId: ${e.message}")
+            ""
+        }
+
         val subtitle = if (success) "Repasse PIX confirmado" else "Repasse PIX não realizado"
 
         return """
@@ -182,6 +205,7 @@ class PayoutPixEmailService(
 
               $extraOk
               $extraErr
+              $couponBlock
               $noteBlock
 
               <p style="margin:16px 0 0;color:#555">

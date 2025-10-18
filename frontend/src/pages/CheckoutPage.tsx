@@ -185,7 +185,9 @@ const CheckoutPage = () => {
   const handleApplyCoupon = async (): Promise<{ success: boolean; discountAmount?: number }> => {
     const result = await applyCoupon(inputValue, totalItems);
     if (result.success && result.discountAmount !== undefined) {
-      alert(`Cupom aplicado com sucesso! Desconto de R$ ${result.discountAmount.toFixed(2)}`);
+      // Usar o valor real aplicado pelo frontend (limitado a R$ 15)
+      const actualDiscount = getDiscountAmount(totalItems);
+      alert(`Cupom aplicado com sucesso! Desconto de R$ ${actualDiscount.toFixed(2)}`);
     }
     return result;
   };

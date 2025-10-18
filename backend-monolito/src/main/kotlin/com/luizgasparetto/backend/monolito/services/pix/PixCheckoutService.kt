@@ -41,6 +41,22 @@ class PixCheckoutService(
         val finalTotal = couponValidation.finalTotal
         val discountAmount = couponValidation.discountAmount
         
+        // Log detalhado para debug
+        log.info("📦 CHECKOUT PIX - Dados recebidos:")
+        log.info("  - Total do request: {}", request.total)
+        log.info("  - Shipping: {}", request.shipping)
+        log.info("  - CouponCode: {}", request.couponCode)
+        log.info("  - Total calculado (original): {}", originalTotal)
+        log.info("  - Cupom válido: {}", couponValidation.valid)
+        log.info("  - Desconto aplicado: {}", discountAmount)
+        log.info("  - Total final: {}", finalTotal)
+        
+        // Validação de segurança: garantir que o total final seja sempre >= 0.01
+        if (finalTotal < BigDecimal("0.01")) {
+            log.error("❌ Total final muito baixo: {} - Rejeitando checkout", finalTotal)
+            throw IllegalArgumentException("Valor do pedido muito baixo. Valor mínimo: R$ 0,01")
+        }
+        
         val txid = UUID.randomUUID().toString().replace("-", "").take(35)
 
         // 1) cria pedido + itens (TX)
