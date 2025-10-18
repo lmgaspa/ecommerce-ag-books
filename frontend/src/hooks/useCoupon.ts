@@ -149,7 +149,15 @@ export const useCoupon = () => {
 
   const getDiscountAmount = (subtotal: number): number => {
     if (!couponState.isValid) return 0;
-    return Math.min(couponState.discount, subtotal);
+    
+    // Limitar o desconto a um valor fixo máximo (R$ 15.00)
+    const MAX_DISCOUNT = 15.00;
+    const actualDiscount = Math.min(couponState.discount, MAX_DISCOUNT);
+    
+    // Garantir que o desconto não seja maior que o subtotal
+    // E que sempre seja pelo menos 0.01 para evitar erro na Efí
+    const finalDiscount = Math.min(actualDiscount, subtotal);
+    return Math.max(finalDiscount, 0);
   };
 
   return {
