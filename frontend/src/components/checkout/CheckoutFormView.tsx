@@ -13,7 +13,6 @@ interface CheckoutFormViewProps {
   setCoupon: (coupon: string) => void;
   handleApplyCoupon: () => Promise<{ success: boolean; discountAmount?: number }>;
   couponValid: boolean;
-  couponDiscount: number;
   isValidating?: boolean;
   form: {
     firstName: string;
@@ -51,7 +50,6 @@ const CheckoutFormView: React.FC<CheckoutFormViewProps> = ({
   setCoupon,
   handleApplyCoupon,
   couponValid,
-  couponDiscount,
   isValidating = false,
   form,
   handleChange,
@@ -272,8 +270,6 @@ const CheckoutFormView: React.FC<CheckoutFormViewProps> = ({
             </div>
           ))}
 
-          <div className="border-t my-3" />
-
           {/* Cupom de desconto */}
           <div className="mb-4">
             <h3 className="text-md font-semibold mb-2">Cupom de Desconto</h3>
@@ -283,11 +279,11 @@ const CheckoutFormView: React.FC<CheckoutFormViewProps> = ({
               onApply={handleApplyCoupon}
               isValidating={isValidating}
               isValid={couponValid}
-              discount={couponDiscount}
+              discount={discount}
             />
             {couponValid && (
               <div className="text-green-600 text-sm mt-2">
-                ✓ Cupom aplicado: R$ {couponDiscount.toFixed(2).replace(".", ",")}
+                ✓ Cupom aplicado: R$ {discount.toFixed(2).replace(".", ",")}
               </div>
             )}
           </div>

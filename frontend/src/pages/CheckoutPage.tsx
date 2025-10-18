@@ -58,7 +58,6 @@ const CheckoutPage = () => {
     applyCoupon, 
     getDiscountAmount, 
     isValid: couponValid, 
-    discount: couponDiscount, 
     inputValue, 
     setInputValue,
     isValidating
@@ -273,7 +272,6 @@ const CheckoutPage = () => {
       setCoupon={setInputValue}
       handleApplyCoupon={handleApplyCoupon}
       couponValid={couponValid}
-      couponDiscount={couponDiscount}
       isValidating={isValidating}
       form={form}
       updateQuantity={updateQuantity}

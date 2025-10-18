@@ -12,7 +12,6 @@ interface CheckoutFormProps {
   setCoupon: (coupon: string) => void;
   handleApplyCoupon: () => Promise<{ success: boolean; discountAmount?: number }>;
   couponValid: boolean;
-  couponDiscount: number;
   isValidating?: boolean;
   form: {
     firstName: string;
@@ -102,7 +101,6 @@ const CheckoutForm: React.FC<CheckoutFormProps> = (props) => {
       setCoupon={props.setCoupon}
       handleApplyCoupon={props.handleApplyCoupon}
       couponValid={props.couponValid}
-      couponDiscount={props.couponDiscount}
       isValidating={props.isValidating}
       form={props.form}
       handleChange={props.handleChange}
