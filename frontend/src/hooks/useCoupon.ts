@@ -5,6 +5,7 @@ interface CouponState {
   code: string;
   discount: number;
   isValid: boolean;
+  errorMessage?: string;
 }
 
 const COUPON_STORAGE_KEY = 'applied_coupon';
@@ -16,6 +17,7 @@ export const useCoupon = () => {
     isValid: false,
   });
   const [inputValue, setInputValue] = useState('');
+  const [isValidating, setIsValidating] = useState(false);
 
   // Carregar cupom do sessionStorage na inicialização
   useEffect(() => {
@@ -25,26 +27,17 @@ export const useCoupon = () => {
         try {
           const parsed = JSON.parse(storedCoupon);
           setCouponState(parsed);
-          setInputValue(parsed.code); // Preencher o input com o código aplicado
+          setInputValue(parsed.code);
         } catch {
-          // Se não conseguir fazer parse, limpa o storage
           sessionStorage.removeItem(COUPON_STORAGE_KEY);
         }
       }
     };
 
-    // Carregar na inicialização
     loadCoupon();
 
-    // Listener para evento customizado de mudança de cupom
-    const handleCouponChange = () => {
-      loadCoupon();
-    };
-
-    // Listener para quando a página ganha foco (volta de outra página)
-    const handleFocus = () => {
-      loadCoupon();
-    };
+    const handleCouponChange = () => loadCoupon();
+    const handleFocus = () => loadCoupon();
 
     window.addEventListener('couponChanged', handleCouponChange);
     window.addEventListener('focus', handleFocus);
@@ -55,51 +48,64 @@ export const useCoupon = () => {
     };
   }, []);
 
-  const applyCoupon = (code: string): boolean => {
-    // Verificar se as variáveis de ambiente estão configuradas
-    const couponCode = import.meta.env.VITE_COUPON_CODE;
-    const discountValue = import.meta.env.VITE_COUPON_DISCOUNT_VALUE;
-    
-    if (!couponCode || !discountValue) {
-      alert("Sistema de cupons não configurado. Entre em contato com o suporte.");
+  const applyCoupon = async (code: string, orderTotal: number): Promise<boolean> => {
+    if (!code.trim()) {
+      alert("Digite um código de cupom.");
       return false;
     }
 
-    const validCoupon = couponCode.toUpperCase();
-    const FIXED_DISCOUNT = Number(discountValue);
+    setIsValidating(true);
 
-    if (isNaN(FIXED_DISCOUNT) || FIXED_DISCOUNT <= 0) {
-      alert("Configuração de desconto inválida. Entre em contato com o suporte.");
-      return false;
-    }
+    try {
+      const API_BASE = import.meta.env.VITE_API_BASE;
+      if (!API_BASE) {
+        throw new Error("VITE_API_BASE não configurado");
+      }
 
-    if (code.trim().toUpperCase() === validCoupon) {
-      const newState = {
-        code: code.trim().toUpperCase(),
-        discount: FIXED_DISCOUNT,
-        isValid: true,
-      };
-      
-      setCouponState(newState);
-      setInputValue(code.trim().toUpperCase()); // Atualizar o input também
-      sessionStorage.setItem(COUPON_STORAGE_KEY, JSON.stringify(newState));
-      
-      // Disparar evento customizado para notificar outras páginas
-      window.dispatchEvent(new CustomEvent('couponChanged'));
-      
-      return true;
-    } else {
-      alert("Cupom inválido.");
+      const response = await fetch(`${API_BASE}/api/coupons/validate`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          code: code.trim(),
+          orderTotal: orderTotal,
+          userEmail: null // ou pegar do contexto do usuário
+        }),
+      });
+
+      const result = await response.json();
+
+      if (result.valid) {
+        const newState = {
+          code: code.trim().toUpperCase(),
+          discount: result.discountAmount,
+          isValid: true,
+        };
+        
+        setCouponState(newState);
+        setInputValue(code.trim().toUpperCase());
+        sessionStorage.setItem(COUPON_STORAGE_KEY, JSON.stringify(newState));
+        
+        window.dispatchEvent(new CustomEvent('couponChanged'));
+        return true;
+      } else {
+        alert(result.errorMessage || "Cupom inválido.");
+        return false;
+      }
+    } catch (error) {
+      console.error('Erro ao validar cupom:', error);
+      alert("Erro ao validar cupom. Tente novamente.");
       return false;
+    } finally {
+      setIsValidating(false);
     }
   };
 
   const clearCoupon = () => {
     setCouponState({ code: '', discount: 0, isValid: false });
-    setInputValue(''); // Limpar o input também
+    setInputValue('');
     sessionStorage.removeItem(COUPON_STORAGE_KEY);
-    
-    // Disparar evento customizado para notificar outras páginas
     window.dispatchEvent(new CustomEvent('couponChanged'));
   };
 
@@ -117,5 +123,7 @@ export const useCoupon = () => {
     applyCoupon,
     clearCoupon,
     getDiscountAmount,
+    isValidating,
+    errorMessage: couponState.errorMessage,
   };
 };

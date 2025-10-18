@@ -54,7 +54,15 @@ const DEFAULT_FORM: FormState = {
 const CheckoutPage = () => {
   const navigate = useNavigate();
   const { getCart } = useCart();
-  const { applyCoupon, getDiscountAmount, isValid: couponValid, discount: couponDiscount, inputValue, setInputValue } = useCoupon();
+  const { 
+    applyCoupon, 
+    getDiscountAmount, 
+    isValid: couponValid, 
+    discount: couponDiscount, 
+    inputValue, 
+    setInputValue,
+    isValidating
+  } = useCoupon();
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [totalItems, setTotalItems] = useState(0);
   const [shipping, setShipping] = useState(0);
@@ -174,8 +182,8 @@ const CheckoutPage = () => {
     setTotalItems(updated.reduce((acc, it) => acc + it.price * it.quantity, 0));
   };
 
-  const handleApplyCoupon = () => {
-    const success = applyCoupon(inputValue);
+  const handleApplyCoupon = async () => {
+    const success = await applyCoupon(inputValue, totalItems);
     if (success) {
       const appliedDiscount = getDiscountAmount(totalItems);
       alert(`Cupom aplicado com sucesso! Desconto de R$ ${appliedDiscount.toFixed(2)}`);
@@ -221,6 +229,7 @@ const CheckoutPage = () => {
       handleApplyCoupon={handleApplyCoupon}
       couponValid={couponValid}
       couponDiscount={couponDiscount}
+      isValidating={isValidating}
       form={form}
       updateQuantity={updateQuantity}
       removeItem={removeItem}

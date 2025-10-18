@@ -148,7 +148,7 @@ interface CardData {
 
 export default function CardPaymentPage() {
   const navigate = useNavigate();
-  const { getDiscountAmount } = useCoupon();
+  const { getDiscountAmount, couponCode } = useCoupon();
 
   const cart: CartItem[] = useMemo(() => readJson<CartItem[]>("cart", []), []);
   const form: CheckoutFormData = useMemo(
@@ -413,9 +413,10 @@ export default function CardPaymentPage() {
           paymentToken: tokenResp.payment_token,
           installments,
           cartItems: cart,
-          total,
+          total: subtotal + shipping, // Total original SEM desconto
           shipping,
           discount: desconto,
+          couponCode: couponCode || null,
         }),
       });
 

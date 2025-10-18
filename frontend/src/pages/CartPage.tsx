@@ -24,7 +24,15 @@ const CartPage = () => {
   const [subtotal, setSubtotal] = useState(0);
   const [stockById, setStockById] = useState<Record<string, number>>({});
   const navigate = useNavigate();
-  const { applyCoupon, getDiscountAmount, isValid: couponValid, discount: couponDiscount, inputValue, setInputValue } = useCoupon();
+  const { 
+    applyCoupon, 
+    getDiscountAmount, 
+    isValid: couponValid, 
+    discount: couponDiscount, 
+    inputValue, 
+    setInputValue,
+    isValidating
+  } = useCoupon();
 
   // Utilidades para manipular cookies
   const getCartFromCookies = (): CartItem[] => {
@@ -130,8 +138,8 @@ const CartPage = () => {
     calculateSubtotal(updatedItems);
   };
 
-  const handleApplyCoupon = () => {
-    const success = applyCoupon(inputValue);
+  const handleApplyCoupon = async () => {
+    const success = await applyCoupon(inputValue, subtotal);
     if (success) {
       const appliedDiscount = getDiscountAmount(subtotal);
       alert(`Cupom aplicado com sucesso! Desconto de R$ ${appliedDiscount.toFixed(2)}`);
@@ -154,7 +162,14 @@ const CartPage = () => {
 
           <div className="flex flex-col lg:flex-row gap-4 mb-8">
             <div className="w-full lg:w-1/2">
-              <CouponInput value={inputValue} onChange={setInputValue} onApply={handleApplyCoupon} />
+              <CouponInput 
+                value={inputValue} 
+                onChange={setInputValue} 
+                onApply={handleApplyCoupon}
+                isValidating={isValidating}
+                isValid={couponValid}
+                discount={couponDiscount}
+              />
               {couponValid && (
                 <div className="text-green-600 text-sm mt-2">
                   ✓ Cupom {couponDiscount > 0 ? `${couponDiscount.toFixed(2).replace(".", ",")}` : ''} aplicado

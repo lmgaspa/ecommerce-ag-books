@@ -85,7 +85,7 @@ const SecurityWarning = ({
 
 export default function PixPaymentPage() {
   const navigate = useNavigate();
-  const { getDiscountAmount } = useCoupon();
+  const { getDiscountAmount, couponCode } = useCoupon();
 
   const initialCart: CartItem[] = cookieStorage.get<CartItem[]>("cart", []);
 
@@ -214,8 +214,9 @@ export default function PixPaymentPage() {
             payment: "pix",
             shipping: frete,
             cartItems,
-            total: totalComFrete,
+            total: totalProdutos + (frete ?? 0), // Total original SEM desconto
             discount: desconto,
+            couponCode: couponCode || null,
           }),
         });
 
