@@ -2,11 +2,18 @@ import React from "react";
 import { formatPrice } from "../../utils/formatPrice";
 import type { CartItem } from "../../context/CartTypes";
 import { analytics, mapCartItems } from "../../analytics";
+import CouponInput from "../cart/CouponInput";
 
 interface CheckoutFormViewProps {
   cartItems: CartItem[];
-  total: number; // já com frete somado
+  total: number; // já com frete somado e desconto aplicado
   shipping: number;
+  discount: number;
+  coupon: string;
+  setCoupon: (coupon: string) => void;
+  handleApplyCoupon: () => void;
+  couponValid: boolean;
+  couponDiscount: number;
   form: {
     firstName: string;
     lastName: string;
@@ -38,6 +45,12 @@ const CheckoutFormView: React.FC<CheckoutFormViewProps> = ({
   cartItems,
   total,
   shipping,
+  discount,
+  coupon,
+  setCoupon,
+  handleApplyCoupon,
+  couponValid,
+  couponDiscount,
   form,
   handleChange,
   updateQuantity,
@@ -259,6 +272,17 @@ const CheckoutFormView: React.FC<CheckoutFormViewProps> = ({
 
           <div className="border-t my-3" />
 
+          {/* Cupom de desconto */}
+          <div className="mb-4">
+            <h3 className="text-md font-semibold mb-2">Cupom de Desconto</h3>
+            <CouponInput value={coupon} onChange={setCoupon} onApply={handleApplyCoupon} />
+            {couponValid && (
+              <div className="text-green-600 text-sm mt-2">
+                ✓ Cupom aplicado: R$ {couponDiscount.toFixed(2).replace(".", ",")}
+              </div>
+            )}
+          </div>
+
           {/* Forma de pagamento */}
           <div className="mb-4">
             <h3 className="text-md font-semibold mb-2">Forma de pagamento</h3>
@@ -290,6 +314,13 @@ const CheckoutFormView: React.FC<CheckoutFormViewProps> = ({
             <span>Entrega</span>
             <span>{shipping > 0 ? formatPrice(shipping) : "---"}</span>
           </div>
+
+          {discount > 0 && (
+            <div className="flex justify-between text-green-600">
+              <span>Desconto</span>
+              <span>-{formatPrice(discount)}</span>
+            </div>
+          )}
 
           <div className="flex justify-between font-bold">
             <span>Total</span>

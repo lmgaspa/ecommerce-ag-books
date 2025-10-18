@@ -2,6 +2,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useCart } from "../hooks/useCart";
+import { useCoupon } from "../hooks/useCoupon";
 import { formatCep, formatCpf, formatCelular } from "../utils/masks";
 import CheckoutForm from "./CheckoutForm";
 import type { CartItem } from "../context/CartTypes";
@@ -53,6 +54,7 @@ const DEFAULT_FORM: FormState = {
 const CheckoutPage = () => {
   const navigate = useNavigate();
   const { getCart } = useCart();
+  const { applyCoupon, getDiscountAmount, isValid: couponValid, discount: couponDiscount, inputValue, setInputValue } = useCoupon();
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [totalItems, setTotalItems] = useState(0);
   const [shipping, setShipping] = useState(0);
@@ -172,6 +174,14 @@ const CheckoutPage = () => {
     setTotalItems(updated.reduce((acc, it) => acc + it.price * it.quantity, 0));
   };
 
+  const handleApplyCoupon = () => {
+    const success = applyCoupon(inputValue);
+    if (success) {
+      const appliedDiscount = getDiscountAmount(totalItems);
+      alert(`Cupom aplicado com sucesso! Desconto de R$ ${appliedDiscount.toFixed(2)}`);
+    }
+  };
+
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
   ) => {
@@ -203,8 +213,14 @@ const CheckoutPage = () => {
   return (
     <CheckoutForm
       cartItems={cartItems}
-      total={totalItems + shipping}
+      total={totalItems + shipping - getDiscountAmount(totalItems)}
       shipping={shipping}
+      discount={getDiscountAmount(totalItems)}
+      coupon={inputValue}
+      setCoupon={setInputValue}
+      handleApplyCoupon={handleApplyCoupon}
+      couponValid={couponValid}
+      couponDiscount={couponDiscount}
       form={form}
       updateQuantity={updateQuantity}
       removeItem={removeItem}

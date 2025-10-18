@@ -38,11 +38,16 @@ export interface TokenizeResult {
 
 const ENV = (import.meta as unknown as { env?: Record<string, string | undefined> }).env ?? {};
 
-// Your .env:
-// VITE_EFI_PAYEE_CODE=b348a05b9c0391c8097ab315eb3b4d56
-// VITE_EFI_SANDBOX=false  => forces PRODUCTION here
-export const EFI_ACCOUNT =
-  (ENV.VITE_EFI_PAYEE_CODE ?? "").trim() || "b348a05b9c0391c8097ab315eb3b4d56";
+
+// Environment configuration
+export const EFI_ACCOUNT = (ENV.VITE_EFI_PAYEE_CODE ?? "").trim();
+
+if (!EFI_ACCOUNT) {
+  throw new Error("VITE_EFI_PAYEE_CODE não configurado. Configure a variável de ambiente.");
+}
+
+// TypeScript assertion: EFI_ACCOUNT is guaranteed to be string after the check above
+const EFI_ACCOUNT_ASSERTED: string = EFI_ACCOUNT;
 
 export const EFI_ENV: EfiEnv =
   String(ENV.VITE_EFI_SANDBOX ?? "false").toLowerCase() === "true"
@@ -120,7 +125,7 @@ export const tokenize = async (
 export const getInstallmentsEnv = (
   brand: CardBrand,
   totalInCents: number
-) => getInstallments(EFI_ACCOUNT, EFI_ENV, brand, totalInCents);
+) => getInstallments(EFI_ACCOUNT_ASSERTED, EFI_ENV, brand, totalInCents);
 
 export const tokenizeEnv = (data: TokenizeInput) =>
-  tokenize(EFI_ACCOUNT, EFI_ENV, data);
+  tokenize(EFI_ACCOUNT_ASSERTED, EFI_ENV, data);

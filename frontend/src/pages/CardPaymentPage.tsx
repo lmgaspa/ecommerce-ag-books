@@ -13,6 +13,7 @@ import {
 } from "../services/efiCard";
 import { cookieStorage } from "../utils/cookieUtils";
 import { analytics, mapCartItems } from "../analytics";
+import { useCoupon } from "../hooks/useCoupon";
 
 /* ===================== Local types & helpers ===================== */
 
@@ -59,9 +60,14 @@ type BrandUI = CardBrand;
 // Read env in a way that survives Vite type narrowing during SSR/CSR builds.
 const ENV = (import.meta as unknown as { env?: Record<string, string | undefined> }).env ?? {};
 
-const PAYEE_CODE =
-  ENV.VITE_EFI_PAYEE_CODE?.trim() ||
-  "b348a05b9c0391c8097ab315eb3b4d56"; // fallback only for dev
+const PAYEE_CODE = ENV.VITE_EFI_PAYEE_CODE?.trim();
+
+if (!PAYEE_CODE) {
+  throw new Error("VITE_EFI_PAYEE_CODE não configurado. Configure a variável de ambiente.");
+}
+
+// TypeScript assertion: PAYEE_CODE is guaranteed to be string after the check above
+const PAYEE_CODE_ASSERTED: string = PAYEE_CODE;
 
 // If VITE_EFI_SANDBOX === "true" => sandbox, otherwise production.
 // Your .env has VITE_EFI_SANDBOX=false, so this becomes "production".
@@ -70,9 +76,11 @@ const EFI_ENV: "production" | "sandbox" =
     ? "sandbox"
     : "production";
 
-const API_BASE =
-  ENV.VITE_API_BASE?.replace(/\/+$/, "") ||
-  "https://ecommerceag-6fa0e6a5edbf.herokuapp.com";
+const API_BASE = ENV.VITE_API_BASE?.replace(/\/+$/, "");
+
+if (!API_BASE) {
+  throw new Error("VITE_API_BASE não configurado. Configure a variável de ambiente.");
+}
 
 /* ---------- Formatting helpers ---------- */
 function formatCardNumber(value: string, brand: BrandUI): string {
@@ -140,6 +148,7 @@ interface CardData {
 
 export default function CardPaymentPage() {
   const navigate = useNavigate();
+  const { getDiscountAmount } = useCoupon();
 
   const cart: CartItem[] = useMemo(() => readJson<CartItem[]>("cart", []), []);
   const form: CheckoutFormData = useMemo(
@@ -149,7 +158,8 @@ export default function CardPaymentPage() {
 
   const shipping = Number(form?.shipping ?? 0);
   const subtotal = cart.reduce((acc, i) => acc + i.price * i.quantity, 0);
-  const total = subtotal + shipping;
+  const desconto = getDiscountAmount(subtotal);
+  const total = subtotal + shipping - desconto;
 
   // Guard: if cart empty or total invalid, go back to checkout
   useEffect(() => {
@@ -272,7 +282,7 @@ export default function CardPaymentPage() {
           setInstallments(1);
           return;
         }
-        const resp = await getInstallments(PAYEE_CODE, EFI_ENV, brand as CardBrand, cents);
+        const resp = await getInstallments(PAYEE_CODE_ASSERTED, EFI_ENV, brand as CardBrand, cents);
         setInstallmentOptions(resp.installments || []);
         if (resp.installments?.length) {
           setInstallments(resp.installments[0].installment);
@@ -383,7 +393,7 @@ export default function CardPaymentPage() {
       }
 
       // Tokenize with Efí using env-derived EFI_ENV and PAYEE_CODE
-      const tokenResp = await tokenize(PAYEE_CODE, EFI_ENV, {
+      const tokenResp = await tokenize(PAYEE_CODE_ASSERTED, EFI_ENV, {
         brand: brand as CardBrand,
         number: numberDigits,
         cvv: card.cvv,
@@ -405,6 +415,7 @@ export default function CardPaymentPage() {
           cartItems: cart,
           total,
           shipping,
+          discount: desconto,
         }),
       });
 
@@ -505,6 +516,31 @@ export default function CardPaymentPage() {
           </div>
         </div>
       )}
+
+      {/* Resumo do Pedido */}
+      <div className="bg-gray-50 p-4 mb-6 rounded-lg">
+        <h3 className="text-lg font-semibold mb-3">Resumo do Pedido</h3>
+        <div className="space-y-2">
+          <div className="flex justify-between">
+            <span>Subtotal:</span>
+            <span>R$ {subtotal.toFixed(2).replace(".", ",")}</span>
+          </div>
+          <div className="flex justify-between">
+            <span>Frete:</span>
+            <span>R$ {shipping.toFixed(2).replace(".", ",")}</span>
+          </div>
+          {desconto > 0 && (
+            <div className="flex justify-between text-green-600">
+              <span>Desconto:</span>
+              <span>-R$ {desconto.toFixed(2).replace(".", ",")}</span>
+            </div>
+          )}
+          <div className="flex justify-between font-bold text-lg border-t pt-2">
+            <span>Total:</span>
+            <span>R$ {total.toFixed(2).replace(".", ",")}</span>
+          </div>
+        </div>
+      </div>
 
       <label className="block text-sm font-medium mb-1">Bandeira</label>
       <select value={brand} onChange={onChangeBrand} className="border p-2 w-full mb-4 rounded">

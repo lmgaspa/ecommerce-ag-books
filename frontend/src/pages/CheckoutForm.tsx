@@ -5,8 +5,14 @@ import CheckoutFormView from "../components/checkout/CheckoutFormView";
 
 interface CheckoutFormProps {
   cartItems: CartItem[];
-  total: number;    // itens + frete
+  total: number;    // itens + frete - desconto
   shipping: number;
+  discount: number;
+  coupon: string;
+  setCoupon: (coupon: string) => void;
+  handleApplyCoupon: () => void;
+  couponValid: boolean;
+  couponDiscount: number;
   form: {
     firstName: string;
     lastName: string;
@@ -69,6 +75,8 @@ const CheckoutForm: React.FC<CheckoutFormProps> = (props) => {
           cartItems: props.cartItems,
           total: props.total,
           shipping: props.shipping,
+          discount: props.discount,
+          coupon: props.coupon,
         },
       });
       return;
@@ -85,8 +93,21 @@ const CheckoutForm: React.FC<CheckoutFormProps> = (props) => {
 
   return (
     <CheckoutFormView
-      {...props}
+      cartItems={props.cartItems}
+      total={props.total}
+      shipping={props.shipping}
+      discount={props.discount}
+      coupon={props.coupon}
+      setCoupon={props.setCoupon}
+      handleApplyCoupon={props.handleApplyCoupon}
+      couponValid={props.couponValid}
+      couponDiscount={props.couponDiscount}
+      form={props.form}
+      handleChange={props.handleChange}
+      updateQuantity={props.updateQuantity}
+      removeItem={props.removeItem}
       handleCheckout={handleCheckout}
+      onNavigateBack={props.onNavigateBack}
     />
   );
 };

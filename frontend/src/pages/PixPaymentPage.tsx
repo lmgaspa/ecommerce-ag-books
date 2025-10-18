@@ -6,10 +6,13 @@ import { calcularFreteComBaseEmCarrinho } from "../utils/freteUtils";
 import { cookieStorage } from "../utils/cookieUtils";
 import type { CheckoutFormData } from "../types/CheckoutTypes";
 import { mapCartItems } from "../analytics";
+import { useCoupon } from "../hooks/useCoupon";
 
-const API_BASE =
-  import.meta.env.VITE_API_BASE ??
-  "https://ecommerceag-6fa0e6a5edbf.herokuapp.com";
+const API_BASE = import.meta.env.VITE_API_BASE;
+
+if (!API_BASE) {
+  throw new Error("VITE_API_BASE não configurado. Configure a variável de ambiente.");
+}
 
 function formatMMSS(totalSec: number) {
   const m = Math.floor(totalSec / 60);
@@ -82,6 +85,7 @@ const SecurityWarning = ({
 
 export default function PixPaymentPage() {
   const navigate = useNavigate();
+  const { getDiscountAmount } = useCoupon();
 
   const initialCart: CartItem[] = cookieStorage.get<CartItem[]>("cart", []);
 
@@ -129,9 +133,13 @@ export default function PixPaymentPage() {
     () => cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0),
     [cartItems]
   );
+  const desconto = useMemo(
+    () => getDiscountAmount(totalProdutos),
+    [totalProdutos, getDiscountAmount]
+  );
   const totalComFrete = useMemo(
-    () => totalProdutos + (frete ?? 0),
-    [totalProdutos, frete]
+    () => totalProdutos + (frete ?? 0) - desconto,
+    [totalProdutos, frete, desconto]
   );
 
   useEffect(() => {
@@ -206,7 +214,8 @@ export default function PixPaymentPage() {
             payment: "pix",
             shipping: frete,
             cartItems,
-            total: totalProdutos,
+            total: totalComFrete,
+            discount: desconto,
           }),
         });
 
@@ -255,7 +264,7 @@ export default function PixPaymentPage() {
       }
     };
     run();
-  }, [frete, cartItems, totalProdutos, navigate, orderId]);
+  }, [frete, cartItems, totalProdutos, desconto, totalComFrete, navigate, orderId]);
 
   // Contador regressivo
   useEffect(() => {
@@ -310,17 +319,14 @@ export default function PixPaymentPage() {
         // Salva snapshot do purchase para a tela de confirmação disparar
         try {
           const itemsPayload = mapCartItems(cartItems);
-          const subtotal = cartItems.reduce(
-            (acc, i) => acc + i.price * i.quantity,
-            0
-          );
           const shippingVal = Number(frete ?? 0);
           const payload = {
             transaction_id: id,
-            value: Number(subtotal + shippingVal),
+            value: Number(totalComFrete),
             currency: "BRL",
             shipping: shippingVal,
             tax: 0,
+            discount: desconto,
             items: itemsPayload,
           };
           sessionStorage.setItem(
@@ -367,7 +373,7 @@ export default function PixPaymentPage() {
         }, wait);
       };
     },
-    [navigate, expiresAtMs, cartItems, frete]
+    [navigate, expiresAtMs, cartItems, frete, desconto, totalComFrete]
   );
 
   useEffect(() => {
@@ -422,8 +428,13 @@ export default function PixPaymentPage() {
       <div className="mt-6 text-right space-y-2">
         <p className="text-lg">Subtotal: {formatPrice(totalProdutos)}</p>
         <p className="text-lg">Frete: {formatPrice(frete ?? 0)}</p>
+        {desconto > 0 && (
+          <p className="text-lg text-green-600">
+            Desconto: -{formatPrice(desconto)}
+          </p>
+        )}
         <p className="text-xl font-bold">
-          Total com Frete: {formatPrice(totalComFrete)}
+          Total: {formatPrice(totalComFrete)}
         </p>
       </div>
 

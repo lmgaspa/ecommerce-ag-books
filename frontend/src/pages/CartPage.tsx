@@ -5,6 +5,7 @@ import CouponInput from "../components/cart/CouponInput";
 import CartSummary from "../components/cart/CartSummary";
 import { getStockByIds } from "../api/stock";
 import Cookies from "js-cookie";
+import { useCoupon } from "../hooks/useCoupon";
 
 interface CartItem {
   id: string;
@@ -21,10 +22,9 @@ const COOKIE_DAYS = 7;
 const CartPage = () => {
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [subtotal, setSubtotal] = useState(0);
-  const [discount, setDiscount] = useState(0);
-  const [coupon, setCoupon] = useState("");
   const [stockById, setStockById] = useState<Record<string, number>>({});
   const navigate = useNavigate();
+  const { applyCoupon, getDiscountAmount, isValid: couponValid, discount: couponDiscount, inputValue, setInputValue } = useCoupon();
 
   // Utilidades para manipular cookies
   const getCartFromCookies = (): CartItem[] => {
@@ -131,29 +131,10 @@ const CartPage = () => {
   };
 
   const handleApplyCoupon = () => {
-    // Verificar se as variáveis de ambiente estão configuradas
-    const couponCode = import.meta.env.VITE_COUPON_CODE;
-    const discountValue = import.meta.env.VITE_COUPON_DISCOUNT_VALUE;
-    
-    if (!couponCode || !discountValue) {
-      alert("Sistema de cupons não configurado. Entre em contato com o suporte.");
-      return;
-    }
-
-    const validCoupon = couponCode.toUpperCase();
-    const FIXED_DISCOUNT = Number(discountValue);
-
-    if (isNaN(FIXED_DISCOUNT) || FIXED_DISCOUNT <= 0) {
-      alert("Configuração de desconto inválida. Entre em contato com o suporte.");
-      return;
-    }
-
-    if (coupon.trim().toUpperCase() === validCoupon) {
-      const appliedDiscount = Math.min(FIXED_DISCOUNT, Number(subtotal) || 0);
-      setDiscount(appliedDiscount);
+    const success = applyCoupon(inputValue);
+    if (success) {
+      const appliedDiscount = getDiscountAmount(subtotal);
       alert(`Cupom aplicado com sucesso! Desconto de R$ ${appliedDiscount.toFixed(2)}`);
-    } else {
-      alert("Cupom inválido.");
     }
   };
 
@@ -173,10 +154,15 @@ const CartPage = () => {
 
           <div className="flex flex-col lg:flex-row gap-4 mb-8">
             <div className="w-full lg:w-1/2">
-              <CouponInput value={coupon} onChange={setCoupon} onApply={handleApplyCoupon} />
+              <CouponInput value={inputValue} onChange={setInputValue} onApply={handleApplyCoupon} />
+              {couponValid && (
+                <div className="text-green-600 text-sm mt-2">
+                  ✓ Cupom {couponDiscount > 0 ? `${couponDiscount.toFixed(2).replace(".", ",")}` : ''} aplicado
+                </div>
+              )}
             </div>
             <div className="w-full lg:w-1/2">
-              <CartSummary subtotal={subtotal} discount={discount} onCheckout={handleCheckout} />
+              <CartSummary subtotal={subtotal} discount={getDiscountAmount(subtotal)} onCheckout={handleCheckout} />
             </div>
           </div>
 
@@ -189,7 +175,7 @@ const CartPage = () => {
         </>
       )}
       <div className="text-right text-xl font-bold mt-4">
-        Total: R$ {(subtotal - discount).toFixed(2).replace(".", ",")}
+        Total: R$ {(subtotal - getDiscountAmount(subtotal)).toFixed(2).replace(".", ",")}
       </div>
     </div>
   );
