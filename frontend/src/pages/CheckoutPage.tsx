@@ -64,11 +64,11 @@ const CheckoutPage = () => {
   } = useCoupon();
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [totalItems, setTotalItems] = useState(0);
-  const [shipping, setShipping] = useState(0);
   const [stockById, setStockById] = useState<Record<string, number>>({});
   const [form, setForm] = useState<FormState>(() =>
     cookieStorage.get<FormState>("checkoutForm", DEFAULT_FORM)
   );
+  const [shipping, setShipping] = useState(() => form.shipping ?? 0);
 
   const onNavigateBack = () => navigate("/books");
 
@@ -125,6 +125,13 @@ const CheckoutPage = () => {
     cartItemsRef.current = cartItems;
   }, [cartItems]);
 
+  // Sincronizar shipping com o valor salvo no formulário
+  useEffect(() => {
+    if (form.shipping !== undefined && form.shipping !== shipping) {
+      setShipping(form.shipping);
+    }
+  }, [form.shipping, shipping]);
+
   // Função estabilizada para calcular frete
   const calcularFrete = useCallback(async () => {
     const currentCartItems = cartItemsRef.current;
@@ -135,6 +142,11 @@ const CheckoutPage = () => {
       currentCartItems.length === 0
     ) {
       setShipping(0);
+      return;
+    }
+
+    // Se já temos um frete calculado e válido, não recalcular
+    if (shipping > 0 && form.shipping === shipping) {
       return;
     }
 
@@ -166,7 +178,7 @@ const CheckoutPage = () => {
     } catch {
       setShipping(0);
     }
-  }, [cpfCepInfo]);
+  }, [cpfCepInfo, shipping, form.shipping]);
 
   // Calcula frete e envia GA4: add_shipping_info
   useEffect(() => {
