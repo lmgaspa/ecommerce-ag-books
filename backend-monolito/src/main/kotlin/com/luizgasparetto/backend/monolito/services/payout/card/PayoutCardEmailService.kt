@@ -20,7 +20,7 @@ class PayoutCardEmailService(
     @Value("\${email.author}") private val authorEmail: String,
     @Value("\${application.brand.name:Agenor Gasparetto - E-Commerce}") private val brandName: String,
     @Value("\${mail.from:}") private val configuredFrom: String,
-    @Value("\${mail.logo.url:https://andescore-landingpage.vercel.app/AndesCore.jpg}") private val logoUrl: String,
+    @Value("\${mail.logo.url:https://www.andescoresoftware.com.br.jpg}") private val logoUrl: String,
     @Value("\${application.timezone:America/Bahia}") private val appTz: String,
     @Value("\${efi.payout.favored-key:}") private val favoredKeyFromConfig: String
 ) {

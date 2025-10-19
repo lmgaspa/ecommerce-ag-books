@@ -20,7 +20,7 @@ class CardEmailService(
     @Value("\${application.brand.name:Agenor Gasparetto - E-Commerce}") private val brandName: String,
     @Value("\${mail.from:}") private val configuredFrom: String,
     // **Base Welcome (modelo 1): usar logo externo para não gerar anexo**
-    @Value("\${mail.logo.url:https://andescore-landingpage.vercel.app/AndesCore.jpg}") private val logoUrl: String
+    @Value("\${mail.logo.url:https://www.andescoresoftware.com.br.jpg}") private val logoUrl: String
 ) {
     private val log = LoggerFactory.getLogger(CardEmailService::class.java)
 

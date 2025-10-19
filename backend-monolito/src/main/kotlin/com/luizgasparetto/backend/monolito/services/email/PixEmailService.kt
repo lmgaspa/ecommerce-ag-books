@@ -20,7 +20,7 @@ class PixEmailService(
     // remetente opcional configurável; se vazio, tenta MAIL_USERNAME; por fim, authorEmail
     @Value("\${mail.from:}") private val configuredFrom: String,
     // **modelo Welcome**: usar logo externa para não gerar anexo
-    @Value("\${mail.logo.url:https://andescore-landingpage.vercel.app/AndesCore.jpg}") private val logoUrl: String
+    @Value("\${mail.logo.url:https://www.andescoresoftware.com.br.jpg}") private val logoUrl: String
 ) {
     private val log = LoggerFactory.getLogger(PixEmailService::class.java)
 
