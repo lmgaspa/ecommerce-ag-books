@@ -70,13 +70,13 @@ if (!PAYEE_CODE) {
 const PAYEE_CODE_ASSERTED: string = PAYEE_CODE;
 
 // If VITE_EFI_SANDBOX === "true" => sandbox, otherwise production.
-// Your .env has VITE_EFI_SANDBOX=false, so this becomes "production".
 const EFI_ENV: "production" | "sandbox" =
   String(ENV.VITE_EFI_SANDBOX ?? "false").toLowerCase() === "true"
     ? "sandbox"
     : "production";
 
-const API_BASE = ENV.VITE_API_BASE?.replace(/\/+$/, "");
+const RAW_API_BASE = ENV.VITE_API_BASE;
+const API_BASE = RAW_API_BASE ? String(RAW_API_BASE).replace(/\/+$/, "") : "";
 
 if (!API_BASE) {
   throw new Error("VITE_API_BASE não configurado. Configure a variável de ambiente.");
@@ -193,45 +193,33 @@ export default function CardPaymentPage() {
   const numberDigits = card.number.replace(/\D/g, "");
   const cvvLen = brand === "amex" ? 4 : 3;
 
-  // Timer para controle de expiração - FIXED: Now works with partial data
+  // Timer para controle de expiração
   useEffect(() => {
-    // FIXED: Only require ttlSeconds, not all warning fields
-    if (!checkoutResponse?.ttlSeconds) {
-      return;
-    }
+    if (!checkoutResponse?.ttlSeconds) return;
 
     const ttlSeconds = checkoutResponse.ttlSeconds;
-    // FIXED: Added fallbacks for missing warning data (OCP compliance)
-    const warningAt = checkoutResponse.warningAt || 60; // Fallback to 60 seconds
-    const securityWarningAt = checkoutResponse.securityWarningAt || 60; // Fallback to 60 seconds
+    const warningAt = checkoutResponse.warningAt || 60;
+    const securityWarningAt = checkoutResponse.securityWarningAt || 60;
 
-    // Inicia o timer
     setTimeLeft(ttlSeconds);
 
     const interval = setInterval(() => {
       setTimeLeft(prev => {
         if (prev === null) return null;
-        
         const newTime = prev - 1;
-        
-        // FIXED: Security warning at 60 seconds (not 30)
+
         if (newTime <= securityWarningAt && !showSecurityWarning) {
           setShowSecurityWarning(true);
         }
-        
-        // FIXED: Normal warning at 60 seconds (not 60)
         if (newTime <= warningAt && !showWarning) {
           setShowWarning(true);
         }
-        
-        // Expiração
         if (newTime <= 0) {
           setIsExpired(true);
           setShowWarning(false);
           setShowSecurityWarning(false);
           return 0;
         }
-        
         return newTime;
       });
     }, 1000);
@@ -366,7 +354,6 @@ export default function CardPaymentPage() {
     return Math.round((total / installments) * 100) / 100;
   }, [selectedInstallment, installments, total]);
 
-  // Função para formatar tempo restante
   const formatTimeLeft = (seconds: number): string => {
     const minutes = Math.floor(seconds / 60);
     const remainingSeconds = seconds % 60;
@@ -392,7 +379,7 @@ export default function CardPaymentPage() {
         /* no-op */
       }
 
-      // Tokenize with Efí using env-derived EFI_ENV and PAYEE_CODE
+      // Tokenize with Efí
       const tokenResp = await tokenize(PAYEE_CODE_ASSERTED, EFI_ENV, {
         brand: brand as CardBrand,
         number: numberDigits,
@@ -415,15 +402,7 @@ export default function CardPaymentPage() {
         discount: desconto,
         couponCode: couponCode || null,
       };
-      
-      console.log('🔍 DEBUG CARD PAYLOAD:');
-      console.log('Subtotal:', subtotal);
-      console.log('Shipping:', shipping);
-      console.log('Desconto:', desconto);
-      console.log('Total enviado (sem desconto):', payload.total);
-      console.log('Total final (com desconto):', total);
-      console.log('Payload completo:', payload);
-      
+
       const res = await fetch(`${API_BASE}/api/checkout/card`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -431,7 +410,6 @@ export default function CardPaymentPage() {
       });
 
       if (!res.ok) {
-        // Try to surface backend error text for observability
         const txt = await res.text();
         throw new Error(txt || `HTTP ${res.status} while charging`);
       }
@@ -447,7 +425,7 @@ export default function CardPaymentPage() {
         ? paidStatuses.includes(String(data.status).toUpperCase())
         : false;
 
-      // If paid, stage purchase payload for confirmation page (to fire GA purchase once)
+      // Se pago, prepara purchase para a tela de confirmação
       if (isPaid && data.orderId) {
         const purchasePayload = {
           transaction_id: String(data.orderId),
@@ -475,8 +453,6 @@ export default function CardPaymentPage() {
     <div className="max-w-md mx-auto p-6">
       <h2 className="text-xl font-semibold mb-4 text-center">Pagamento com Cartão</h2>
 
-      {/* FIXED: Updated warning messages to match backend security logic */}
-      {/* Aviso de expiração em 15 minutos */}
       {checkoutResponse && !isExpired && (
         <div className="bg-blue-50 text-blue-700 p-3 mb-4 rounded-lg border border-blue-200">
           <div className="flex items-center">
@@ -489,7 +465,6 @@ export default function CardPaymentPage() {
         </div>
       )}
 
-      {/* FIXED: Warning at 60 seconds - updated text and styling */}
       {showWarning && !isExpired && (
         <div className="bg-orange-50 text-orange-700 p-3 mb-4 rounded-lg border border-orange-200">
           <div className="flex items-center">
@@ -502,7 +477,6 @@ export default function CardPaymentPage() {
         </div>
       )}
 
-      {/* FIXED: Security warning at 60 seconds - updated text and styling */}
       {showSecurityWarning && !isExpired && (
         <div className="bg-red-50 text-red-700 p-3 mb-4 rounded-lg border border-red-200">
           <div className="flex items-center">
@@ -515,7 +489,6 @@ export default function CardPaymentPage() {
         </div>
       )}
 
-      {/* FIXED: Expiration message - updated text to match backend logic */}
       {isExpired && (
         <div className="bg-red-50 text-red-700 p-3 mb-4 rounded-lg border border-red-200">
           <div className="flex items-center">

@@ -22,6 +22,7 @@
     "noUncheckedSideEffectImports": true,
 
     /* 👇 garante que os tipos globais da Efí sejam vistos */
+    "types": ["vite/client"],
     "typeRoots": ["./node_modules/@types", "./types", "./src/types"]
   },
   /* 👇 deixa explícito o .d.ts */

@@ -1,3 +1,4 @@
+// src/components/CookieConsent.tsx
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 
@@ -14,7 +15,7 @@ export default function CookieConsent() {
       window.location.hostname === "localhost" ||
       window.location.hostname === "127.0.0.1";
     // Em localhost: SameSite=Lax (sem Secure)
-    // Em domínio/https: SameSite=None; Secure (requerido por browser)
+    // Em domínio/https: SameSite=None; Secure
     const extra = isLocalhost ? "SameSite=Lax;" : "Secure; SameSite=None;";
     document.cookie = `cookie_consent=${value}; max-age=31536000; path=/; ${extra}`;
   };

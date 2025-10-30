@@ -1,3 +1,4 @@
+// src/pages/PixPaymentPage.tsx
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import type { CartItem } from "../context/CartTypes";
@@ -8,7 +9,8 @@ import type { CheckoutFormData } from "../types/CheckoutTypes";
 import { mapCartItems } from "../analytics";
 import { useCoupon } from "../hooks/useCoupon";
 
-const API_BASE = import.meta.env.VITE_API_BASE;
+const RAW_API_BASE = import.meta.env.VITE_API_BASE;
+const API_BASE = RAW_API_BASE ? String(RAW_API_BASE).replace(/\/+$/, "") : "";
 
 if (!API_BASE) {
   throw new Error("VITE_API_BASE não configurado. Configure a variável de ambiente.");
@@ -215,15 +217,7 @@ export default function PixPaymentPage() {
           discount: desconto,
           couponCode: couponCode || null,
         };
-        
-        console.log('🔍 DEBUG PIX PAYLOAD:');
-        console.log('Total produtos:', totalProdutos);
-        console.log('Frete:', frete);
-        console.log('Desconto:', desconto);
-        console.log('Total enviado (sem desconto):', payload.total);
-        console.log('Total final (com desconto):', totalComFrete);
-        console.log('Payload completo:', payload);
-        
+
         const res = await fetch(`${API_BASE}/api/checkout/pix`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
