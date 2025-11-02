@@ -1,1 +1,1 @@
-web: java $JAVA_OPTS -Dserver.port=$PORT -jar target/app.jar
+web: java -Dserver.port=$PORT -jar target/email-backend.jar
