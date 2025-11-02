@@ -1,4 +1,5 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import org.springframework.boot.gradle.tasks.bundling.BootJar
 
 plugins {
     kotlin("jvm") version "2.2.0"
@@ -22,14 +23,16 @@ java {
 
 repositories {
     mavenCentral()
-    // (sem milestone/snapshot p/ build previsível)
 }
 
-/** Configuração dedicada para as tasks do Flyway (driver + adaptador) */
+/**
+ * Configuração dedicada para as tasks do Flyway (driver + adaptador),
+ * mantendo a app independente do classpath das tasks.
+ */
 val flywaySupport by configurations.creating
 
 dependencies {
-    // Use o BOM do Spring Boot para evitar conflito de versões
+    // BOM do Spring Boot para alinhamento de versões
     implementation(platform("org.springframework.boot:spring-boot-dependencies:3.4.10"))
 
     implementation("org.springframework.boot:spring-boot-starter-web")
@@ -39,7 +42,7 @@ dependencies {
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
     implementation("org.jetbrains.kotlin:kotlin-reflect")
 
-    // Deixe o Boot gerenciar httpclient/httpcore (evita CNF de TlsSocketStrategy)
+    // HTTP client (deixe o Boot gerenciar as versões)
     implementation("org.apache.httpcomponents.client5:httpclient5")
     implementation("org.apache.httpcomponents.core5:httpcore5")
 
@@ -53,7 +56,7 @@ dependencies {
     compileOnly("org.projectlombok:lombok")
     annotationProcessor("org.projectlombok:lombok")
 
-    // Metadata para @ConfigurationProperties (opcional – se tiver classes Kotlin, considere kapt)
+    // Metadata para @ConfigurationProperties
     annotationProcessor("org.springframework.boot:spring-boot-configuration-processor")
 
     developmentOnly("org.springframework.boot:spring-boot-devtools")
@@ -63,11 +66,11 @@ dependencies {
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 
-    // Flyway também na aplicação (se quiser)
+    // Flyway também na aplicação (opcional)
     implementation("org.flywaydb:flyway-core:10.20.0")
     implementation("org.flywaydb:flyway-database-postgresql:10.20.0")
 
-    // ---- Classpath dedicado das tasks do Flyway (sem encadear .also / sem genéricos) ----
+    // ---- Classpath dedicado das tasks do Flyway ----
     add(flywaySupport.name, "org.flywaydb:flyway-core:10.20.0")
     add(flywaySupport.name, "org.flywaydb:flyway-database-postgresql:10.20.0")
     add(flywaySupport.name, "org.postgresql:postgresql:42.7.7")
@@ -137,3 +140,24 @@ flyway {
     locations = arrayOf(locationsValue)
     cleanDisabled = cleanDisabledValue
 }
+
+/* ============================
+ * BootJar com nome estável (sem "app")
+ * Gera build/libs/ecommerceag-backend-<versão>.jar
+ * ============================ */
+
+tasks.named<BootJar>("bootJar") {
+    archiveBaseName.set("ecommerceag-backend")
+    // archiveVersion usa automaticamente a propriedade "version" do projeto
+    // (ex.: 0.0.1-SNAPSHOT) — mantenho para não quebrar pipelines/versionamento.
+    // Se quiser suprimir a versão do nome do jar, você poderia:
+    // archiveVersion.set("")  // -> gera ecommerceag-backend.jar (não recomendo se há cache/CD)
+}
+
+/* ============================
+ * Dicas:
+ * - Garanta que o wrapper está versionado:
+ *   ./gradlew wrapper (local) e commit de gradlew + gradle/wrapper/*
+ * - No Procfile, use wildcard para não travar na versão:
+ *   web: bash -lc 'java $JAVA_OPTS -Dserver.port=$PORT -jar $(ls build/libs/ecommerceag-backend-*.jar | head -n1)'
+ * ============================ */
