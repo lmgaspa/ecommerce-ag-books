@@ -45,7 +45,7 @@ email:
 
 mail:
   logo:
-    url: ${MAIL_LOGO_URL:https://andescore-landingpage.vercel.app/AndesCore.jpg}
+    url: ${MAIL_LOGO_URL:https://www.andescoresoftware.com.br/AndesCore.jpg}
 
 efi:
   pix:
