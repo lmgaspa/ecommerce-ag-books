@@ -1,6 +1,6 @@
-package com.seuapp.ga4.service
+package com.luizgasparetto.backend.monolito.ga4.service
 
-import com.seuapp.ga4.dto.FunnelDTO
+import com.luizgasparetto.backend.monolito.ga4.dto.FunnelDTO
 import java.time.LocalDate
 import java.util.UUID
 

@@ -1,7 +1,8 @@
-package com.seuapp.ga4.service
+package com.luizgasparetto.backend.monolito.g4.service
 
 import com.google.cloud.bigquery.*
-import com.seuapp.ga4.dto.FunnelDTO
+import com.luizgasparetto.backend.monolito.ga4.dto.FunnelDTO
+import com.luizgasparetto.backend.monolito.ga4.service.Ga4Service
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service

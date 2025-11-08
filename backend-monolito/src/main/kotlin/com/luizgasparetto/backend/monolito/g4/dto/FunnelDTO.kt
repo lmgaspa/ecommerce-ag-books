@@ -1,4 +1,4 @@
-package com.seuapp.ga4.dto
+package com.luizgasparetto.backend.monolito.ga4.dto
 
 data class FunnelDTO(
     val viewItem: Long,

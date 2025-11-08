@@ -1,4 +1,4 @@
-package com.luizgasparetto.backend.monolito.config.g4
+package com.luizgasparetto.backend.monolito.g4.config
 
 import com.google.auth.oauth2.GoogleCredentials
 import com.google.auth.oauth2.ServiceAccountCredentials

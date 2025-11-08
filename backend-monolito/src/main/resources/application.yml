@@ -133,3 +133,9 @@ app:
     scheduling:
       pool:
         size: 2
+
+  ga4:
+    bq:
+      project-id: seu-projeto-gcp
+      dataset-id: analytics_ga4
+      max-bytes-billed: 1000000000000
