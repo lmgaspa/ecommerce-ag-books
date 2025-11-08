@@ -53,6 +53,8 @@ dependencies {
 
     implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.13")
 
+    implementation("com.google.cloud:google-cloud-bigquery:2.39.0")
+
     compileOnly("org.projectlombok:lombok")
     annotationProcessor("org.projectlombok:lombok")
 
