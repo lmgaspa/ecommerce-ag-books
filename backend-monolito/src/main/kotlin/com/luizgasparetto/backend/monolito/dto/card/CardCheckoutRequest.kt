@@ -2,7 +2,6 @@ package com.luizgasparetto.backend.monolito.dto.card
 
 import com.fasterxml.jackson.annotation.JsonAlias
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties
-import jakarta.validation.constraints.Max
 import jakarta.validation.constraints.Min
 
 @JsonIgnoreProperties(ignoreUnknown = true)
@@ -34,8 +33,7 @@ data class CardCheckoutRequest(
     val paymentToken: String,             // token da SDK Efí (obrigatório p/ cartão)
     
     @field:Min(value = 1, message = "Parcelas deve ser no mínimo 1")
-    @field:Max(value = 6, message = "Parcelas deve ser no máximo 6 (sem juros)")
-    val installments: Int = 1,            // parcelas (1-6, sem juros)
+    val installments: Int = 1,
     
     // Cupom de desconto
     val couponCode: String? = null,

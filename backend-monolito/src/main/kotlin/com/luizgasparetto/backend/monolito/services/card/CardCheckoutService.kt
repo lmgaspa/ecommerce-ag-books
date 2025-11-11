@@ -57,11 +57,6 @@ class CardCheckoutService(
             throw IllegalArgumentException("Valor do pedido muito baixo. Valor mínimo: R$ 0,01")
         }
         
-        // 0.1) valida parcelas (1-6, sem juros)
-        if (request.installments < 1 || request.installments > 6) {
-            throw IllegalArgumentException("Parcelas deve ser entre 1 e 6 (sem juros)")
-        }
-
         val txid = "CARD-" + UUID.randomUUID().toString().replace("-", "").take(30)
 
         // 1) cria pedido base + reserva TTL
