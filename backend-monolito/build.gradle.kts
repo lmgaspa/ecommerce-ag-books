@@ -16,16 +16,14 @@ buildscript {
 }
 
 plugins {
-    kotlin("jvm") version "2.2.20"
-    kotlin("plugin.spring") version "2.2.20"
-    kotlin("plugin.noarg") version "2.2.20"
-    kotlin("plugin.allopen") version "2.2.20"
+    kotlin("jvm") version "2.0.21"
+    kotlin("plugin.spring") version "2.0.21"
+    kotlin("plugin.noarg") version "2.0.21"
+    kotlin("plugin.allopen") version "2.0.21"
 
     id("org.springframework.boot") version "3.4.10"
     id("io.spring.dependency-management") version "1.1.6"
-
-    // Flyway atualizado p/ Postgres 18
-    id("org.flywaydb.flyway") version "11.17.0"
+    id("org.flywaydb.flyway") version "11.16.0" // (já atualizado p/ PG 18)
 }
 
 group = "com.luizgasparetto"
