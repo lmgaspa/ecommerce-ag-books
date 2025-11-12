@@ -2,15 +2,14 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.springframework.boot.gradle.tasks.bundling.BootJar
 
 plugins {
-    kotlin("jvm") version "2.2.20"
-    kotlin("plugin.spring") version "2.2.20"
-    kotlin("plugin.jpa") version "2.2.20"
+    kotlin("jvm") version "2.2.0"
+    kotlin("plugin.spring") version "2.2.0"
+    kotlin("plugin.noarg") version "2.2.0"
+    kotlin("plugin.allopen") version "2.2.0" // 👈 adicionado
 
-    id("org.springframework.boot") version "3.5.7"
-    id("io.spring.dependency-management") version "1.1.7"
-
-    // Gradle plugin do Flyway (alinhado com libs 11.x)
-    id("org.flywaydb.flyway") version "11.16.0"
+    id("org.springframework.boot") version "3.4.10"
+    id("io.spring.dependency-management") version "1.1.6"
+    id("org.flywaydb.flyway") version "10.20.0"
 }
 
 group = "com.luizgasparetto"
@@ -22,15 +21,12 @@ java {
 
 repositories { mavenCentral() }
 
-/**
- * Configuração dedicada para as tasks do Flyway (driver + adaptador),
- * mantendo a app independente do classpath das tasks.
- */
+/** Classpath dedicado às tasks do Flyway */
 val flywaySupport by configurations.creating
 
 dependencies {
-    // BOM do Spring Boot para alinhamento de versões
-    implementation(platform("org.springframework.boot:spring-boot-dependencies:3.5.7"))
+    // BOM do Spring Boot (3.4.10)
+    implementation(platform("org.springframework.boot:spring-boot-dependencies:3.4.10"))
 
     implementation("org.springframework.boot:spring-boot-starter-web")
     implementation("org.springframework.boot:spring-boot-starter-data-jpa")
@@ -39,42 +35,43 @@ dependencies {
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
     implementation("org.jetbrains.kotlin:kotlin-reflect")
 
-    // HTTP client (versões gerenciadas pelo BOM do Boot)
+    // HTTP
     implementation("org.apache.httpcomponents.client5:httpclient5")
     implementation("org.apache.httpcomponents.core5:httpcore5")
 
+    // SDK EFI (mantido)
     implementation("br.com.efipay.efisdk:sdk-java-apis-efi:1.2.2")
 
-    // Validation (mantido)
+    // Validation
     implementation("org.hibernate.validator:hibernate-validator:8.0.1.Final")
     implementation("jakarta.validation:jakarta.validation-api:3.0.2")
 
-    // Springdoc (último 2.x estável)
+    // Swagger/springdoc (2.x estável)
     implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.14")
 
-    // Lombok opcional
+    // Lombok (opcional)
     compileOnly("org.projectlombok:lombok")
     annotationProcessor("org.projectlombok:lombok")
 
-    // Metadata para @ConfigurationProperties
+    // @ConfigurationProperties metadata
     annotationProcessor("org.springframework.boot:spring-boot-configuration-processor")
 
     developmentOnly("org.springframework.boot:spring-boot-devtools")
 
-    // Driver JDBC (mantido numa versão segura)
+    // JDBC driver
     runtimeOnly("org.postgresql:postgresql:42.7.7")
 
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 
-    // Flyway na aplicação (subida para 11.x)
-    implementation("org.flywaydb:flyway-core:11.16.0")
-    implementation("org.flywaydb:flyway-database-postgresql:11.16.0")
+    // ---- Flyway libs na app (10.x conforme stack) ----
+    implementation("org.flywaydb:flyway-core:10.20.0")
+    implementation("org.flywaydb:flyway-database-postgresql:10.20.0")
 
     // ---- Classpath dedicado das tasks do Flyway ----
-    add(flywaySupport.name, "org.flywaydb:flyway-core:11.16.0")
-    add(flywaySupport.name, "org.flywaydb:flyway-database-postgresql:11.16.0")
+    add(flywaySupport.name, "org.flywaydb:flyway-core:10.20.0")
+    add(flywaySupport.name, "org.flywaydb:flyway-database-postgresql:10.20.0")
     add(flywaySupport.name, "org.postgresql:postgresql:42.7.7")
 }
 
@@ -89,7 +86,14 @@ kotlin {
     jvmToolchain(21)
 }
 
+/** ✅ Configuração JPA via allOpen + noarg (no lugar do plugin.jpa) */
 allOpen {
+    annotation("jakarta.persistence.Entity")
+    annotation("jakarta.persistence.MappedSuperclass")
+    annotation("jakarta.persistence.Embeddable")
+}
+
+noArg {
     annotation("jakarta.persistence.Entity")
     annotation("jakarta.persistence.MappedSuperclass")
     annotation("jakarta.persistence.Embeddable")
@@ -97,9 +101,7 @@ allOpen {
 
 tasks.test { useJUnitPlatform() }
 
-/* ============================
- * Flyway via ENV (sem quebrar IDE)
- * ============================ */
+/* ============ Flyway via ENV (sem travar IDE) ============ */
 
 val isFlywayTaskRequested = gradle.startParameter.taskNames.any {
     it.startsWith("flyway", ignoreCase = true) && it != "bootRun"
@@ -141,10 +143,7 @@ flyway {
     cleanDisabled = cleanDisabledValue
 }
 
-/* ============================
- * BootJar com nome estável (sem "app")
- * Gera build/libs/ecommerceag-backend-<versão>.jar
- * ============================ */
+/* ============ BootJar nome estável ============ */
 tasks.named<BootJar>("bootJar") {
     archiveBaseName.set("ecommerceag-backend")
 }
