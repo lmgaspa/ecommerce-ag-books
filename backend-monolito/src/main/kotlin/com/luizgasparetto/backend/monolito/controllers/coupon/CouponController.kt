@@ -4,13 +4,14 @@ import com.luizgasparetto.backend.monolito.dto.coupon.CouponDto
 import com.luizgasparetto.backend.monolito.dto.coupon.CouponValidationRequestDto
 import com.luizgasparetto.backend.monolito.dto.coupon.CouponValidationResponseDto
 import com.luizgasparetto.backend.monolito.services.coupon.CouponService
+import com.luizgasparetto.backend.monolito.web.ApiRoutes
 import jakarta.validation.Valid
 import org.slf4j.LoggerFactory
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
 
 @RestController
-@RequestMapping("/api/coupons")
+@RequestMapping("${ApiRoutes.API_V1}/coupons")
 class CouponController(
     private val couponService: CouponService
 ) {

@@ -5,9 +5,10 @@ import org.slf4j.LoggerFactory
 import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
+import com.luizgasparetto.backend.monolito.web.ApiRoutes
 
 @RestController
-@RequestMapping("/api/webhooks/payment")
+@RequestMapping("${ApiRoutes.API_V1}/webhooks/payment")
 class PaymentWebhookController(
     private val rawEvents: PaymentRawEventService,
     private val trigger: PaymentTriggerService

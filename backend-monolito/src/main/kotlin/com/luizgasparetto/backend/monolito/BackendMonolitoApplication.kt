@@ -4,6 +4,7 @@ import com.luizgasparetto.backend.monolito.config.efi.CardEfiProperties
 import com.luizgasparetto.backend.monolito.config.efi.PixEfiProperties
 import com.luizgasparetto.backend.monolito.config.payments.EfiPayoutProps
 import com.luizgasparetto.backend.monolito.privacy.PrivacyProps
+import com.luizgasparetto.backend.monolito.bootstrap.BootstrapAuthorProperties
 import org.springframework.boot.autoconfigure.SpringBootApplication
 import org.springframework.boot.context.properties.ConfigurationPropertiesScan
 import org.springframework.boot.context.properties.EnableConfigurationProperties
@@ -13,7 +14,7 @@ import org.springframework.scheduling.annotation.EnableScheduling
 @SpringBootApplication
 @ConfigurationPropertiesScan
 @EnableScheduling
-@EnableConfigurationProperties(PrivacyProps::class, PixEfiProperties::class, CardEfiProperties::class, EfiPayoutProps::class)
+@EnableConfigurationProperties(PrivacyProps::class, PixEfiProperties::class, CardEfiProperties::class, EfiPayoutProps::class, BootstrapAuthorProperties::class)
 class BackendMonolitoApplication
 
 fun main(args: Array<String>) {

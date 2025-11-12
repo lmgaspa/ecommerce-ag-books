@@ -3,13 +3,14 @@ package com.luizgasparetto.backend.monolito.controllers.checkout.card
 import com.luizgasparetto.backend.monolito.dto.card.CardCheckoutRequest
 import com.luizgasparetto.backend.monolito.dto.card.CardCheckoutResponse
 import com.luizgasparetto.backend.monolito.services.card.CardCheckoutService
+import com.luizgasparetto.backend.monolito.web.ApiRoutes
 import jakarta.validation.Valid
 import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
 
 @RestController
-@RequestMapping("/api/checkout/card")
+@RequestMapping("${ApiRoutes.API_V1}/checkout/card")
 class CardCheckoutController(
     private val cardCheckoutService: CardCheckoutService
 ) {

@@ -15,11 +15,12 @@ import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
+import com.luizgasparetto.backend.monolito.web.ApiRoutes
 import org.springframework.web.bind.annotation.RestController
 import java.time.OffsetDateTime
 
 @RestController
-@RequestMapping("/api/webhooks/payment")
+@RequestMapping("${ApiRoutes.API_V1}/webhooks/payment")
 class PixEfiWebhookController(
     private val orderRepository: OrderRepository,
     private val emailService: PixEmailService,

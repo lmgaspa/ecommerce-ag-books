@@ -6,10 +6,11 @@ import org.slf4j.LoggerFactory
 import org.springframework.http.ResponseEntity
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate
 import org.springframework.web.bind.annotation.*
+import com.luizgasparetto.backend.monolito.web.ApiRoutes
 import java.math.BigDecimal
 
 @RestController
-@RequestMapping("/api/webhooks/payout")
+@RequestMapping("${ApiRoutes.API_V1}/webhooks/payout")
 class EfiPixSendWebhookController(
     private val jdbc: NamedParameterJdbcTemplate,
     private val mail: PayoutPixEmailService

@@ -13,11 +13,12 @@ import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
+import com.luizgasparetto.backend.monolito.web.ApiRoutes
 import org.springframework.web.bind.annotation.RestController
 import java.time.OffsetDateTime
 
 @RestController
-@RequestMapping("/api/webhooks/payment")
+@RequestMapping("${ApiRoutes.API_V1}/webhooks/payment")
 class CardEfiWebhookController(
     private val mapper: ObjectMapper,
     private val orders: OrderRepository,

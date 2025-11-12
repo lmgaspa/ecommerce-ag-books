@@ -13,7 +13,7 @@ class CorsConfig {
 
         override fun addCorsMappings(registry: CorsRegistry) {
             // 1) SSE: apenas GET neste prefixo
-            registry.addMapping("/api/orders/**")
+            registry.addMapping("/api/v1/orders/**")
                 .allowedOriginPatterns(
                     "https://www.agenorgasparetto.com.br",
                     "https://agenorgasparetto.com.br",
@@ -27,7 +27,7 @@ class CorsConfig {
 
             // 2) PRIVACY / CONSENT: precisa expor Set-Cookie (o browser pode instalá-lo mesmo sem credentials)
             // Em produção, chame via mesma origem (rewrites) para evitar CORS; aqui fica restrito por segurança.
-            registry.addMapping("/api/privacy/**")
+            registry.addMapping("/api/v1/privacy/**")
                 .allowedOriginPatterns(
                     "https://www.agenorgasparetto.com.br",
                     "https://agenorgasparetto.com.br",
@@ -40,7 +40,7 @@ class CorsConfig {
                 .maxAge(3600)
 
             // 3) REST genérico: mantenha estrito; sem credenciais; sem necessidade de expor Set-Cookie aqui
-            registry.addMapping("/api/**")
+            registry.addMapping("/api/v1/**")
                 .allowedOriginPatterns(
                     "https://www.agenorgasparetto.com.br",
                     "https://agenorgasparetto.com.br",
