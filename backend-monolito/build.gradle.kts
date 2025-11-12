@@ -1,14 +1,17 @@
+// =======================================================
+// build.gradle.kts — Ecommerce AG Books (Spring Boot + Kotlin + Flyway)
+// Compatível com PostgreSQL 18 e Flyway 11.17.0
+// Baseline/Legacy/Live escolhidos por FLYWAY_MODE (baseline|legacy|legacy+live)
+// =======================================================
+
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.springframework.boot.gradle.tasks.bundling.BootJar
 
-// ----------------------------------------------------------------------
-// Classpath do PLUGIN do Flyway (necessário p/ "jdbc:postgresql://...")
-// ----------------------------------------------------------------------
+// >>> MUITO IMPORTANTE: estas deps entram no CLASSPATH DO PLUGIN do Flyway (não da app)
 buildscript {
-    repositories { mavenCentral() }
     dependencies {
-        classpath("org.flywaydb:flyway-database-postgresql:10.20.0")
         classpath("org.postgresql:postgresql:42.7.7")
+        classpath("org.flywaydb:flyway-database-postgresql:11.17.0")
     }
 }
 
@@ -21,8 +24,8 @@ plugins {
     id("org.springframework.boot") version "3.4.10"
     id("io.spring.dependency-management") version "1.1.6"
 
-    // Flyway conforme a stack
-    id("org.flywaydb.flyway") version "10.20.0"
+    // Flyway atualizado p/ Postgres 18
+    id("org.flywaydb.flyway") version "11.17.0"
 }
 
 group = "com.luizgasparetto"
@@ -34,11 +37,8 @@ java {
 
 repositories { mavenCentral() }
 
-/** Classpath dedicado para as tasks do Flyway */
-val flywaySupport by configurations.creating
-
 dependencies {
-    // BOM do Spring Boot 3.4.x
+    // BOM do Spring Boot
     implementation(platform("org.springframework.boot:spring-boot-dependencies:3.4.10"))
 
     // Starters
@@ -64,31 +64,28 @@ dependencies {
     // OpenAPI (springdoc 2.x)
     implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.14")
 
-    // Lombok (opcional) + metadata
+    // Lombok (opcional)
     compileOnly("org.projectlombok:lombok")
     annotationProcessor("org.projectlombok:lombok")
+
+    // Metadata de @ConfigurationProperties
     annotationProcessor("org.springframework.boot:spring-boot-configuration-processor")
 
     developmentOnly("org.springframework.boot:spring-boot-devtools")
 
-    // Driver JDBC na aplicação
+    // JDBC driver (runtime da APP)
     runtimeOnly("org.postgresql:postgresql:42.7.7")
+
+    // Flyway na APP (runtime) — não conflita com o classpath do plugin já resolvido acima
+    implementation("org.flywaydb:flyway-core:11.17.0")
+    implementation("org.flywaydb:flyway-database-postgresql:11.17.0")
 
     // Testes
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 
-    // Flyway na app
-    implementation("org.flywaydb:flyway-core:10.20.0")
-    implementation("org.flywaydb:flyway-database-postgresql:10.20.0")
-
-    // ---- Classpath dedicado das tasks do Flyway ----
-    add(flywaySupport.name, "org.flywaydb:flyway-core:10.20.0")
-    add(flywaySupport.name, "org.flywaydb:flyway-database-postgresql:10.20.0")
-    add(flywaySupport.name, "org.postgresql:postgresql:42.7.7")
-
-    // ---- Mitigação CVE (Logback) ----
+    // Mitigação CVE (ex.: logback)
     constraints {
         implementation("ch.qos.logback:logback-classic:1.5.20")
         implementation("ch.qos.logback:logback-core:1.5.20")
@@ -120,7 +117,7 @@ noArg {
 
 tasks.test { useJUnitPlatform() }
 
-/** Templates/ops fora do classpath da app */
+/** Recursos: não empacotar templates operacionais */
 sourceSets {
     named("main") {
         resources {
@@ -130,7 +127,17 @@ sourceSets {
     }
 }
 
-/* =================== Flyway por ENV =================== */
+/* ====================== Flyway via ENV ======================
+   Variáveis esperadas:
+   - FLYWAY_URL / JDBC_DATABASE_URL / DATABASE_URL / SPRING_DATASOURCE_URL
+   - FLYWAY_USER / JDBC_DATABASE_USERNAME / DB_USERNAME / SPRING_DATASOURCE_USERNAME
+   - FLYWAY_PASSWORD / JDBC_DATABASE_PASSWORD / DB_PASSWORD / SPRING_DATASOURCE_PASSWORD
+   - FLYWAY_SCHEMAS (ex.: "public")
+   - FLYWAY_MODE = baseline | legacy | live (padrão: legacy)
+   - (opcional) FLYWAY_LOCATIONS = "filesystem:... , filesystem:..."
+   - (opcional) FLYWAY_CLEAN_DISABLED=true|false (padrão true)
+   - (opcional) -Dflyway.outOfOrder=true para cicatrizar buracos históricos
+   ========================================================== */
 
 val isFlywayTaskRequested = gradle.startParameter.taskNames.any {
     it.startsWith("flyway", ignoreCase = true) && it != "bootRun"
@@ -158,47 +165,43 @@ val passValue = if (isFlywayTaskRequested)
 else
     envOr("__placeholder__", "FLYWAY_PASSWORD", "JDBC_DATABASE_PASSWORD", "DB_PASSWORD", "SPRING_DATASOURCE_PASSWORD")
 
-val schemasValue = envOr("public", "FLYWAY_SCHEMAS")
+val schemasValue = if (isFlywayTaskRequested)
+    requiredEnv("FLYWAY_SCHEMAS")
+else
+    envOr("public", "FLYWAY_SCHEMAS")
 
-// Locais padrão por modo (sobreponha via FLYWAY_LOCATIONS se quiser)
-val flywayLocationsFromMode: Array<String> = when ((System.getenv("FLYWAY_MODE") ?: "legacy").lowercase()) {
+// Mapeia diretórios pelo modo escolhido
+val flywayMode = (System.getenv("FLYWAY_MODE") ?: "legacy").lowercase()
+
+val locationsFromMode: Array<String> = when (flywayMode) {
     "baseline" -> arrayOf(
         "filesystem:src/main/resources/db/migration/baseline",
         "filesystem:src/main/resources/db/migration/live"
     )
-    "legacy" -> arrayOf(
+    "live" -> arrayOf(
+        "filesystem:src/main/resources/db/migration/live"
+    )
+    else -> arrayOf( // "legacy" (padrão)
         "filesystem:src/main/resources/db/migration/legacy",
         "filesystem:src/main/resources/db/migration/live"
     )
-    else -> arrayOf("filesystem:src/main/resources/db/migration/live")
 }
 
+// Se FLYWAY_LOCATIONS vier setada, ela prevalece
 val effectiveLocations: Array<String> =
-    if (isFlywayTaskRequested) {
-        val envLoc = System.getenv("FLYWAY_LOCATIONS")
-        if (!envLoc.isNullOrBlank())
-            envLoc.split(',')
-                .map { it.trim() }
-                .filter { it.isNotEmpty() }
-                .map { if (it.startsWith("filesystem:")) it else "filesystem:$it" }
-                .toTypedArray()
-        else flywayLocationsFromMode
-    } else {
-        flywayLocationsFromMode
-    }
+    System.getenv("FLYWAY_LOCATIONS")
+        ?.takeIf { it.isNotBlank() }
+        ?.split(',')
+        ?.map { it.trim() }
+        ?.filter { it.isNotEmpty() }
+        ?.map { if (it.startsWith("filesystem:")) it else "filesystem:$it" }
+        ?.toTypedArray()
+        ?: locationsFromMode
 
-val cleanDisabledValue = (System.getenv("FLYWAY_CLEAN_DISABLED") ?: "true").toBooleanStrictOrNull() ?: true
+val cleanDisabledValue = (System.getenv("FLYWAY_CLEAN_DISABLED") ?: "true")
+    .toBooleanStrictOrNull() ?: true
 
 flyway {
-    // Faz o plugin usar também o classpath extra c/ driver/adapter
-    configurations = arrayOf(
-        "compileClasspath",
-        "runtimeClasspath",
-        "testCompileClasspath",
-        "testRuntimeClasspath",
-        flywaySupport.name
-    )
-    driver = "org.postgresql.Driver"
     url = urlValue
     user = userValue
     password = passValue
@@ -207,7 +210,7 @@ flyway {
     cleanDisabled = cleanDisabledValue
 }
 
-/** BootJar com nome estável */
+/* ====== BootJar com nome previsível ====== */
 tasks.named<BootJar>("bootJar") {
     archiveBaseName.set("ecommerceag-backend")
 }

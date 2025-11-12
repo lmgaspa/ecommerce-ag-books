@@ -1,11 +1,11 @@
--- V20251112__baseline_ecommerce.sql
--- Baseline unificado e idempotente para e-commerce
--- - Alinha pagamentos/autores, cupons e eventos de webhook
--- - Seguro para DB já existente (usa IF NOT EXISTS + checagens em catálogo)
--- - Compatível com clones futuros
+-- V1__core_baseline.sql
+-- Core DB Contract universal para e-commerces (idempotente e OCP-friendly)
+-- - Mantém nomes canônicos e apenas expande (sem quebras)
+-- - Usa checagens de catálogo e IF NOT EXISTS
+-- - Compatível com PostgreSQL 13+ (testado em 18 com Flyway 11.x)
 
 -- ========================================================================
--- 0) EXTENSÕES (preferimos pgcrypto p/ gen_random_uuid)
+-- 0) EXTENSÕES (preferimos pgcrypto para gen_random_uuid)
 -- ========================================================================
 DO $$
 BEGIN
@@ -23,37 +23,34 @@ CREATE TABLE IF NOT EXISTS payment_author_registry (
   email       VARCHAR(255)
 );
 
--- author_uuid (garantir coluna + preenchimento + NOT NULL + UNIQUE)
+-- author_uuid + timestamps (idempotentes)
 ALTER TABLE IF EXISTS payment_author_registry
   ADD COLUMN IF NOT EXISTS author_uuid UUID;
 
--- timestamps básicos (se quiser auditar alterações via trigger repeatable)
 ALTER TABLE IF EXISTS payment_author_registry
   ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
   ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ  NOT NULL DEFAULT NOW();
 
--- Preenche nulos e aplica NOT NULL/UNIQUE de forma idempotente
+-- Preenchimento de UUID nulos + NOT NULL + índice único
 DO $$
 BEGIN
   IF EXISTS (
     SELECT 1 FROM information_schema.columns
-    WHERE table_schema='public' AND table_name='payment_author_registry' AND column_name='author_uuid'
+    WHERE table_schema='public'
+      AND table_name='payment_author_registry'
+      AND column_name='author_uuid'
   ) THEN
-    -- preencher nulos
     UPDATE payment_author_registry
        SET author_uuid = gen_random_uuid()
      WHERE author_uuid IS NULL;
 
-    -- NOT NULL protegido
     BEGIN
       ALTER TABLE payment_author_registry
         ALTER COLUMN author_uuid SET NOT NULL;
     EXCEPTION WHEN others THEN
-      -- ignora se já estiver NOT NULL
-      NULL;
+      NULL; -- já está NOT NULL
     END;
 
-    -- índice único p/ busca estável
     IF NOT EXISTS (
       SELECT 1 FROM pg_indexes
       WHERE schemaname='public' AND indexname='ux_author_registry_uuid'
@@ -64,7 +61,7 @@ BEGIN
   END IF;
 END$$;
 
--- unicidade de e-mail (opcional; cria índice se não existir)
+-- Unicidade opcional por e-mail (se o domínio exigir)
 DO $$
 BEGIN
   IF NOT EXISTS (
@@ -77,7 +74,7 @@ BEGIN
 END$$;
 
 -- ========================================================================
--- 2) CONTAS PIX por autor
+-- 2) CONTAS PIX por autor (1:1)
 -- ========================================================================
 CREATE TABLE IF NOT EXISTS payment_author_accounts (
   author_id BIGINT       NOT NULL,
@@ -137,7 +134,7 @@ BEGIN
   END IF;
 END$$;
 
--- FK p/ books(id) somente se a tabela existir
+-- FK condicional para books(id) se a tabela existir (projeto pode não ter)
 DO $$
 BEGIN
   IF to_regclass('public.books') IS NOT NULL
@@ -150,7 +147,6 @@ BEGIN
   END IF;
 END$$;
 
--- Índice auxiliar
 CREATE INDEX IF NOT EXISTS idx_pba_author_id ON payment_book_authors(author_id);
 
 -- ========================================================================
@@ -170,7 +166,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_site_author_single_active
   ON payment_site_author(active)
   WHERE active = TRUE;
 
--- Seed inativo seguro (só se tabela vazia)
+-- Seed inativo seguro (apenas se tabela vazia)
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM payment_site_author) THEN
@@ -205,7 +201,7 @@ CREATE TABLE IF NOT EXISTS payment_payouts (
   fail_reason          VARCHAR(255)
 );
 
--- Único por pedido (usar ÍNDICE idempotente; evita conflito com constraint antiga)
+-- Único por pedido (índice idempotente; evita conflito com constraints antigas)
 CREATE UNIQUE INDEX IF NOT EXISTS uq_payout_order
   ON payment_payouts(order_id);
 
@@ -312,7 +308,7 @@ CREATE TABLE IF NOT EXISTS order_coupons (
   CONSTRAINT order_coupons_unique UNIQUE (order_id, coupon_id)
 );
 
--- FKs (idempotentes)
+-- FKs idempotentes
 DO $$
 BEGIN
   IF NOT EXISTS (
@@ -344,7 +340,7 @@ COMMENT ON COLUMN coupons.discount_type IS 'FIXED (valor) ou PERCENTAGE (percent
 COMMENT ON COLUMN coupons.discount_value IS 'Valor do desconto em moeda (FIXED) ou percentual (PERCENTAGE)';
 COMMENT ON TABLE  order_coupons IS 'Histórico de cupons aplicados em pedidos';
 
--- Cupom padrão (idempotente)
+-- Cupom padrão idempotente
 INSERT INTO coupons (code, name, description, discount_type, discount_value, minimum_order_value, valid_from, active)
 VALUES ('DESCONTO10','Desconto R$ 15,00','Cupom de desconto fixo de R$ 15,00','FIXED', 15.00, 0, NOW(), TRUE)
 ON CONFLICT (code) DO UPDATE
@@ -357,13 +353,13 @@ SET name = EXCLUDED.name,
     active = TRUE;
 
 -- ========================================================================
--- 8) AJUSTES DE TIPOS EM LEGADO
+-- 8) AJUSTES EM LEGADO (tipos)
 -- ========================================================================
 ALTER TABLE IF EXISTS books
   ALTER COLUMN description SET DATA TYPE TEXT;
 
 -- ========================================================================
--- 9) TRIGGERS DE updated_at (só se função existir; R__triggers reforça)
+-- 9) TRIGGERS DE updated_at (só se a função existir; repeatables podem reforçar)
 -- ========================================================================
 DO $$
 BEGIN
