@@ -2,28 +2,25 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.springframework.boot.gradle.tasks.bundling.BootJar
 
 plugins {
-    kotlin("jvm") version "2.2.0"
-    kotlin("plugin.spring") version "2.2.0"
-    kotlin("plugin.jpa") version "2.2.0"
+    kotlin("jvm") version "2.2.20"
+    kotlin("plugin.spring") version "2.2.20"
+    kotlin("plugin.jpa") version "2.2.20"
 
-    id("org.springframework.boot") version "3.4.10"
+    id("org.springframework.boot") version "3.5.7"
     id("io.spring.dependency-management") version "1.1.7"
 
-    id("org.flywaydb.flyway") version "10.20.0"
+    // Gradle plugin do Flyway (alinhado com libs 11.x)
+    id("org.flywaydb.flyway") version "11.16.0"
 }
 
 group = "com.luizgasparetto"
 version = "0.0.1-SNAPSHOT"
 
 java {
-    toolchain {
-        languageVersion = JavaLanguageVersion.of(21)
-    }
+    toolchain { languageVersion = JavaLanguageVersion.of(21) }
 }
 
-repositories {
-    mavenCentral()
-}
+repositories { mavenCentral() }
 
 /**
  * Configuração dedicada para as tasks do Flyway (driver + adaptador),
@@ -33,7 +30,7 @@ val flywaySupport by configurations.creating
 
 dependencies {
     // BOM do Spring Boot para alinhamento de versões
-    implementation(platform("org.springframework.boot:spring-boot-dependencies:3.4.10"))
+    implementation(platform("org.springframework.boot:spring-boot-dependencies:3.5.7"))
 
     implementation("org.springframework.boot:spring-boot-starter-web")
     implementation("org.springframework.boot:spring-boot-starter-data-jpa")
@@ -42,17 +39,20 @@ dependencies {
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
     implementation("org.jetbrains.kotlin:kotlin-reflect")
 
-    // HTTP client (deixe o Boot gerenciar as versões)
+    // HTTP client (versões gerenciadas pelo BOM do Boot)
     implementation("org.apache.httpcomponents.client5:httpclient5")
     implementation("org.apache.httpcomponents.core5:httpcore5")
 
     implementation("br.com.efipay.efisdk:sdk-java-apis-efi:1.2.2")
 
+    // Validation (mantido)
     implementation("org.hibernate.validator:hibernate-validator:8.0.1.Final")
     implementation("jakarta.validation:jakarta.validation-api:3.0.2")
 
-    implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.13")
+    // Springdoc (último 2.x estável)
+    implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.14")
 
+    // Lombok opcional
     compileOnly("org.projectlombok:lombok")
     annotationProcessor("org.projectlombok:lombok")
 
@@ -60,19 +60,21 @@ dependencies {
     annotationProcessor("org.springframework.boot:spring-boot-configuration-processor")
 
     developmentOnly("org.springframework.boot:spring-boot-devtools")
-    runtimeOnly("org.postgresql:postgresql")
+
+    // Driver JDBC (mantido numa versão segura)
+    runtimeOnly("org.postgresql:postgresql:42.7.7")
 
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 
-    // Flyway também na aplicação (opcional)
-    implementation("org.flywaydb:flyway-core:10.20.0")
-    implementation("org.flywaydb:flyway-database-postgresql:10.20.0")
+    // Flyway na aplicação (subida para 11.x)
+    implementation("org.flywaydb:flyway-core:11.16.0")
+    implementation("org.flywaydb:flyway-database-postgresql:11.16.0")
 
     // ---- Classpath dedicado das tasks do Flyway ----
-    add(flywaySupport.name, "org.flywaydb:flyway-core:10.20.0")
-    add(flywaySupport.name, "org.flywaydb:flyway-database-postgresql:10.20.0")
+    add(flywaySupport.name, "org.flywaydb:flyway-core:11.16.0")
+    add(flywaySupport.name, "org.flywaydb:flyway-database-postgresql:11.16.0")
     add(flywaySupport.name, "org.postgresql:postgresql:42.7.7")
 }
 
@@ -93,9 +95,7 @@ allOpen {
     annotation("jakarta.persistence.Embeddable")
 }
 
-tasks.test {
-    useJUnitPlatform()
-}
+tasks.test { useJUnitPlatform() }
 
 /* ============================
  * Flyway via ENV (sem quebrar IDE)
@@ -145,19 +145,6 @@ flyway {
  * BootJar com nome estável (sem "app")
  * Gera build/libs/ecommerceag-backend-<versão>.jar
  * ============================ */
-
 tasks.named<BootJar>("bootJar") {
     archiveBaseName.set("ecommerceag-backend")
-    // archiveVersion usa automaticamente a propriedade "version" do projeto
-    // (ex.: 0.0.1-SNAPSHOT) — mantenho para não quebrar pipelines/versionamento.
-    // Se quiser suprimir a versão do nome do jar, você poderia:
-    // archiveVersion.set("")  // -> gera ecommerceag-backend.jar (não recomendo se há cache/CD)
 }
-
-/* ============================
- * Dicas:
- * - Garanta que o wrapper está versionado:
- *   ./gradlew wrapper (local) e commit de gradlew + gradle/wrapper/*
- * - No Procfile, use wildcard para não travar na versão:
- *   web: bash -lc 'java $JAVA_OPTS -Dserver.port=$PORT -jar $(ls build/libs/ecommerceag-backend-*.jar | head -n1)'
- * ============================ */
