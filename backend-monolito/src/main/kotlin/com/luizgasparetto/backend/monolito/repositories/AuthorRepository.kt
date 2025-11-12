@@ -6,5 +6,6 @@ import org.springframework.data.jpa.repository.Query
 
 interface AuthorRepository : JpaRepository<Author, Long> {
     @Query("select a from Author a where lower(a.email) = lower(?1)")
-    fun findByEmail(email: String): Author?
+    fun findByEmailIgnoreCase(email: String): Author?
+    fun existsByEmailIgnoreCase(email: String): Boolean
 }

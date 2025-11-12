@@ -1,30 +1,35 @@
 package com.luizgasparetto.backend.monolito.controllers.author
 
 import com.luizgasparetto.backend.monolito.dto.author.AuthorDTO
+import com.luizgasparetto.backend.monolito.dto.author.AuthorUpsertDTO
 import com.luizgasparetto.backend.monolito.services.author.AuthorService
+import jakarta.validation.Valid
+import jakarta.validation.constraints.Email
+import org.springframework.validation.annotation.Validated
 import org.springframework.web.bind.annotation.*
-import com.luizgasparetto.backend.monolito.web.ApiRoutes
 
+@Validated
 @RestController
-@RequestMapping("${ApiRoutes.API_V1}/authors")
+@RequestMapping("/api/authors")
 class AuthorController(
     private val authorService: AuthorService
 ) {
-    @GetMapping
-    fun list(): List<AuthorDTO> = authorService.list()
+    @GetMapping fun list(): List<AuthorDTO> = authorService.list()
 
     @GetMapping("/{id}")
-    fun get(@PathVariable id: Long): AuthorDTO = authorService.getById(id)
+    fun getById(@PathVariable id: Long): AuthorDTO = authorService.getById(id)
 
     @GetMapping("/by-email")
-    fun getByEmail(@RequestParam email: String): AuthorDTO = authorService.getByEmail(email)
+    fun getByEmail(@RequestParam @Email email: String): AuthorDTO = authorService.getByEmail(email)
 
     @PostMapping
-    fun upsert(@RequestBody body: UpsertAuthorRequest): AuthorDTO =
-        authorService.upsert(name = body.name.trim(), email = body.email.trim().lowercase())
-}
+    fun create(@Valid @RequestBody body: AuthorUpsertDTO): AuthorDTO = authorService.create(body)
 
-data class UpsertAuthorRequest(
-    val name: String,
-    val email: String
-)
+    @PutMapping("/{id}")
+    fun update(@PathVariable id: Long, @Valid @RequestBody body: AuthorUpsertDTO): AuthorDTO =
+        authorService.update(id, body)
+
+    @PostMapping("/upsert-by-email")
+    fun upsertByEmail(@Valid @RequestBody body: AuthorUpsertDTO): AuthorDTO =
+        authorService.upsertByEmail(body)
+}

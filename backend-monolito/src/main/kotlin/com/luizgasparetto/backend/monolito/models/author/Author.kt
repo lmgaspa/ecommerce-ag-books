@@ -3,14 +3,11 @@ package com.luizgasparetto.backend.monolito.models.author
 import jakarta.persistence.*
 
 @Entity
-@Table(name = "payment_author_registry")
-class Author(
+@Table(name = "authors")
+data class Author(
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
-    var id: Long? = null,
-
-    @Column(nullable = false)
+    val id: Long? = null,
     var name: String,
-
-    @Column(nullable = false, unique = false) // no schema atual pode não ser unique
-    var email: String
+    @Column(nullable = false, unique = true)
+    val email: String
 )
