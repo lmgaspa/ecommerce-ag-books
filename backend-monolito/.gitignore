@@ -46,3 +46,5 @@ env-dev.ps1
 .env.*
 *.ps1.local
 *.sh.local
+
+src/main/resources/application-heroku.yml
