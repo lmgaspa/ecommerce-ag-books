@@ -1,14 +1,15 @@
 // =======================================================
 // build.gradle.kts — Ecommerce AG Books (Spring Boot + Kotlin + Flyway)
 // Compatível com PostgreSQL 18 e Flyway 11.17.0
-// Baseline/Legacy/Live escolhidos por FLYWAY_MODE (baseline|legacy|legacy+live)
+// Baseline/Legacy/Live escolhidos por FLYWAY_MODE (baseline|legacy|live)
 // =======================================================
 
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.springframework.boot.gradle.tasks.bundling.BootJar
 
-// >>> MUITO IMPORTANTE: estas deps entram no CLASSPATH DO PLUGIN do Flyway (não da app)
+// >>> Estes artefatos entram no CLASSPATH DO PLUGIN do Flyway (não da app)
 buildscript {
+    repositories { mavenCentral() }
     dependencies {
         classpath("org.postgresql:postgresql:42.7.7")
         classpath("org.flywaydb:flyway-database-postgresql:11.17.0")
@@ -23,7 +24,7 @@ plugins {
 
     id("org.springframework.boot") version "3.4.10"
     id("io.spring.dependency-management") version "1.1.6"
-    id("org.flywaydb.flyway") version "11.16.0" // (já atualizado p/ PG 18)
+    id("org.flywaydb.flyway") version "11.17.0" // PG18-ready
 }
 
 group = "com.luizgasparetto"
@@ -59,7 +60,7 @@ dependencies {
     implementation("org.hibernate.validator:hibernate-validator:8.0.1.Final")
     implementation("jakarta.validation:jakarta.validation-api:3.0.2")
 
-    // OpenAPI (springdoc 2.x)
+    // OpenAPI
     implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.14")
 
     // Lombok (opcional)
@@ -74,7 +75,7 @@ dependencies {
     // JDBC driver (runtime da APP)
     runtimeOnly("org.postgresql:postgresql:42.7.7")
 
-    // Flyway na APP (runtime) — não conflita com o classpath do plugin já resolvido acima
+    // Flyway na APP (runtime) — independente do classpath do plugin
     implementation("org.flywaydb:flyway-core:11.17.0")
     implementation("org.flywaydb:flyway-database-postgresql:11.17.0")
 
@@ -83,7 +84,7 @@ dependencies {
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 
-    // Mitigação CVE (ex.: logback)
+    // Mitigações de segurança
     constraints {
         implementation("ch.qos.logback:logback-classic:1.5.20")
         implementation("ch.qos.logback:logback-core:1.5.20")
@@ -101,7 +102,7 @@ kotlin {
     jvmToolchain(21)
 }
 
-/** JPA via allOpen + noArg (estável) */
+/** JPA via allOpen + noArg */
 allOpen {
     annotation("jakarta.persistence.Entity")
     annotation("jakarta.persistence.MappedSuperclass")
@@ -124,80 +125,120 @@ sourceSets {
         }
     }
 }
-
-/* ====================== Flyway via ENV ======================
-   Variáveis esperadas:
-   - FLYWAY_URL / JDBC_DATABASE_URL / DATABASE_URL / SPRING_DATASOURCE_URL
-   - FLYWAY_USER / JDBC_DATABASE_USERNAME / DB_USERNAME / SPRING_DATASOURCE_USERNAME
-   - FLYWAY_PASSWORD / JDBC_DATABASE_PASSWORD / DB_PASSWORD / SPRING_DATASOURCE_PASSWORD
-   - FLYWAY_SCHEMAS (ex.: "public")
-   - FLYWAY_MODE = baseline | legacy | live (padrão: legacy)
-   - (opcional) FLYWAY_LOCATIONS = "filesystem:... , filesystem:..."
-   - (opcional) FLYWAY_CLEAN_DISABLED=true|false (padrão true)
-   - (opcional) -Dflyway.outOfOrder=true para cicatrizar buracos históricos
-   ========================================================== */
+/* ====================== Flyway via ENV (simplificado) ======================
+   - Uma única pasta de migrações: src/main/resources/db/migration
+   - FLYWAY_LOCATIONS (se setado) sobrescreve a localização padrão
+   - Aceita URL vinda do Heroku (postgres://...) e normaliza para jdbc:postgresql://...
+   - Se USER/PASSWORD não vierem por envs, tenta extrair da URL
+   Variáveis aceitas (aliases):
+     URL:   FLYWAY_URL | JDBC_DATABASE_URL | DATABASE_URL | SPRING_DATASOURCE_URL
+     USER:  FLYWAY_USER | JDBC_DATABASE_USERNAME | DB_USERNAME | SPRING_DATASOURCE_USERNAME
+     PASS:  FLYWAY_PASSWORD | JDBC_DATABASE_PASSWORD | DB_PASSWORD | SPRING_DATASOURCE_PASSWORD
+     SCHEMAS: FLYWAY_SCHEMAS (padrão: "public")
+   Extras:
+     FLYWAY_LOCATIONS = "filesystem:...,classpath:..."
+     FLYWAY_CLEAN_DISABLED=true|false (padrão true)
+     -Dflyway.outOfOrder=true  (passado na linha de comando)
+   Placeholders:
+     SITE_AUTHOR_NAME, SITE_AUTHOR_EMAIL, SITE_AUTHOR_PIX_KEY
+   ========================================================================== */
 
 val isFlywayTaskRequested = gradle.startParameter.taskNames.any {
     it.startsWith("flyway", ignoreCase = true) && it != "bootRun"
 }
 
-fun requiredEnv(vararg keys: String): String =
+fun envOr(default: String, vararg keys: String): String =
+    keys.firstNotNullOfOrNull(System::getenv) ?: default
+
+fun firstEnv(vararg keys: String): String? =
     keys.firstNotNullOfOrNull(System::getenv)
-        ?: throw GradleException("Missing required env. Set ONE of: ${keys.joinToString(", ")}")
 
-fun envOr(placeholder: String, vararg keys: String): String =
-    keys.firstNotNullOfOrNull(System::getenv) ?: placeholder
-
-val urlValue = if (isFlywayTaskRequested)
-    requiredEnv("FLYWAY_URL", "JDBC_DATABASE_URL", "DATABASE_URL", "SPRING_DATASOURCE_URL")
-else
-    envOr("jdbc:postgresql://localhost:5432/__placeholder__", "FLYWAY_URL", "JDBC_DATABASE_URL", "DATABASE_URL", "SPRING_DATASOURCE_URL")
-
-val userValue = if (isFlywayTaskRequested)
-    requiredEnv("FLYWAY_USER", "JDBC_DATABASE_USERNAME", "DB_USERNAME", "SPRING_DATASOURCE_USERNAME")
-else
-    envOr("__placeholder__", "FLYWAY_USER", "JDBC_DATABASE_USERNAME", "DB_USERNAME", "SPRING_DATASOURCE_USERNAME")
-
-val passValue = if (isFlywayTaskRequested)
-    requiredEnv("FLYWAY_PASSWORD", "JDBC_DATABASE_PASSWORD", "DB_PASSWORD", "SPRING_DATASOURCE_PASSWORD")
-else
-    envOr("__placeholder__", "FLYWAY_PASSWORD", "JDBC_DATABASE_PASSWORD", "DB_PASSWORD", "SPRING_DATASOURCE_PASSWORD")
-
-val schemasValue = if (isFlywayTaskRequested)
-    requiredEnv("FLYWAY_SCHEMAS")
-else
-    envOr("public", "FLYWAY_SCHEMAS")
-
-// Mapeia diretórios pelo modo escolhido
-val flywayMode = (System.getenv("FLYWAY_MODE") ?: "legacy").lowercase()
-
-val locationsFromMode: Array<String> = when (flywayMode) {
-    "baseline" -> arrayOf(
-        "filesystem:src/main/resources/db/migration/baseline",
-        "filesystem:src/main/resources/db/migration/live"
-    )
-    "live" -> arrayOf(
-        "filesystem:src/main/resources/db/migration/live"
-    )
-    else -> arrayOf( // "legacy" (padrão)
-        "filesystem:src/main/resources/db/migration/legacy",
-        "filesystem:src/main/resources/db/migration/live"
-    )
+/** Converte "postgres://user:pass@host:5432/db?..." → "jdbc:postgresql://host:5432/db?..."  */
+fun normalizeToJdbc(raw: String): String {
+    if (raw.isBlank()) return raw
+    return if (raw.startsWith("postgres://")) {
+        // remove "postgres://user:pass@" → sobra "host:5432/db?..."
+        val hostPart = raw.removePrefix("postgres://").substringAfter("@", raw.removePrefix("postgres://"))
+        val base = "jdbc:postgresql://$hostPart"
+        // garante ssl no Heroku, se não veio
+        if ('?' in base) {
+            if (base.contains("sslmode=")) base else "$base&sslmode=require"
+        } else {
+            "$base?sslmode=require"
+        }
+    } else if (raw.startsWith("jdbc:postgresql://")) {
+        raw
+    } else {
+        // Ex.: URL sem esquema explícito (raro) → tenta prefixar
+        "jdbc:postgresql://$raw"
+    }
 }
 
-// Se FLYWAY_LOCATIONS vier setada, ela prevalece
+/** Extrai user/pass de uma URL estilo postgres://user:pass@host/db */
+fun parseUserFromUrl(url: String): String? = try {
+    val afterScheme = url.substringAfter("://", url)
+    val creds = afterScheme.substringBefore('@', "")
+    creds.substringBefore(':').ifEmpty { null }
+} catch (_: Throwable) { null }
+
+fun parsePassFromUrl(url: String): String? = try {
+    val afterScheme = url.substringAfter("://", url)
+    val creds = afterScheme.substringBefore('@', "")
+    creds.substringAfter(':').ifEmpty { null }
+} catch (_: Throwable) { null }
+
+/* -------- URL -------- */
+val rawUrl = firstEnv("FLYWAY_URL", "JDBC_DATABASE_URL", "DATABASE_URL", "SPRING_DATASOURCE_URL")
+val urlValue = when {
+    isFlywayTaskRequested && rawUrl == null ->
+        throw GradleException(
+            "Missing Flyway URL. Set ONE of: FLYWAY_URL | JDBC_DATABASE_URL | DATABASE_URL | SPRING_DATASOURCE_URL"
+        )
+    rawUrl != null -> normalizeToJdbc(rawUrl)
+    else -> "jdbc:postgresql://localhost:5432/__placeholder__"
+}
+
+/* -------- USER / PASS (prefer envs; fallback: extrai da URL) -------- */
+val userValue = firstEnv("FLYWAY_USER", "JDBC_DATABASE_USERNAME", "DB_USERNAME", "SPRING_DATASOURCE_USERNAME")
+    ?: parseUserFromUrl(firstEnv("DATABASE_URL", "JDBC_DATABASE_URL", "FLYWAY_URL", "SPRING_DATASOURCE_URL") ?: "")
+    ?: if (isFlywayTaskRequested)
+        throw GradleException("Missing Flyway user. Set env FLYWAY_USER (ou um dos aliases) ou inclua na URL.")
+    else "__placeholder__"
+
+val passValue = firstEnv("FLYWAY_PASSWORD", "JDBC_DATABASE_PASSWORD", "DB_PASSWORD", "SPRING_DATASOURCE_PASSWORD")
+    ?: parsePassFromUrl(firstEnv("DATABASE_URL", "JDBC_DATABASE_URL", "FLYWAY_URL", "SPRING_DATASOURCE_URL") ?: "")
+    ?: if (isFlywayTaskRequested)
+        throw GradleException("Missing Flyway password. Set env FLYWAY_PASSWORD (ou um dos aliases) ou inclua na URL.")
+    else "__placeholder__"
+
+/* -------- SCHEMAS -------- */
+val schemasValue =
+    envOr("public", "FLYWAY_SCHEMAS")
+
+/* -------- LOCATIONS --------
+   Padrão: única pasta de migração. Incluo filesystem e classpath para cobrir Gradle task e empacotado. */
 val effectiveLocations: Array<String> =
-    System.getenv("FLYWAY_LOCATIONS")
+    firstEnv("FLYWAY_LOCATIONS")
         ?.takeIf { it.isNotBlank() }
         ?.split(',')
         ?.map { it.trim() }
         ?.filter { it.isNotEmpty() }
-        ?.map { if (it.startsWith("filesystem:")) it else "filesystem:$it" }
+        ?.map { loc -> if (loc.startsWith("filesystem:") || loc.startsWith("classpath:")) loc else "filesystem:$loc" }
         ?.toTypedArray()
-        ?: locationsFromMode
+        ?: arrayOf(
+            "filesystem:src/main/resources/db/migration",
+            "classpath:db/migration"
+        )
 
-val cleanDisabledValue = (System.getenv("FLYWAY_CLEAN_DISABLED") ?: "true")
-    .toBooleanStrictOrNull() ?: true
+/* -------- CLEAN DISABLED -------- */
+val cleanDisabledValue =
+    (System.getenv("FLYWAY_CLEAN_DISABLED") ?: "true")
+        .toBooleanStrictOrNull() ?: true
+
+/* -------- Placeholders -------- */
+val placeholderName  = envOr("Agenor Gasparetto", "SITE_AUTHOR_NAME")
+val placeholderEmail = envOr("ag1957@gmail.com", "SITE_AUTHOR_EMAIL")
+val placeholderPix   = envOr("29322022000", "SITE_AUTHOR_PIX_KEY")
 
 flyway {
     url = urlValue
@@ -206,9 +247,15 @@ flyway {
     schemas = arrayOf(schemasValue)
     locations = effectiveLocations
     cleanDisabled = cleanDisabledValue
+
+    placeholders = mapOf(
+        "SITE_AUTHOR_NAME" to placeholderName,
+        "SITE_AUTHOR_EMAIL" to placeholderEmail,
+        "SITE_AUTHOR_PIX_KEY" to placeholderPix
+    )
 }
 
-/* ====== BootJar com nome previsível ====== */
+// ====== BootJar com nome previsível ======
 tasks.named<BootJar>("bootJar") {
     archiveBaseName.set("ecommerceag-backend")
 }
