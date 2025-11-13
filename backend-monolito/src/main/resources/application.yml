@@ -144,3 +144,5 @@ bootstrap:
     mode: ${BOOTSTRAP_AUTHOR_MODE:text}      # text | ids
     onlyUnmapped: ${BOOTSTRAP_AUTHOR_ONLY_UNMAPPED:true}
     book-ids: ${BOOTSTRAP_AUTHOR_BOOK_IDS:}  # só se mode=ids
+
+#finished
