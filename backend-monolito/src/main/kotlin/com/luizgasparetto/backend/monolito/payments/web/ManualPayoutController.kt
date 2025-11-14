@@ -1,13 +1,14 @@
 // src/main/kotlin/com/luizgasparetto/backend/monolito/payments/web/ManualPayoutController.kt
 package com.luizgasparetto.backend.monolito.payments.web
 
+import com.luizgasparetto.backend.monolito.web.ApiRoutes
 import org.slf4j.LoggerFactory
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
 import java.util.*
 
 @RestController
-@RequestMapping("/internal/payouts")
+@RequestMapping("${ApiRoutes.API_V1}/internal/payouts")
 class ManualPayoutController(
     private val trigger: PaymentTriggerService
 ) {

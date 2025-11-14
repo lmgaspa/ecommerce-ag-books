@@ -7,12 +7,10 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer
 
 @Configuration
 class CorsConfig {
-
     @Bean
     fun corsConfigurer(): WebMvcConfigurer = object : WebMvcConfigurer {
-
         override fun addCorsMappings(registry: CorsRegistry) {
-            // 1) SSE: apenas GET neste prefixo
+            // 1) SSE
             registry.addMapping("/api/v1/orders/**")
                 .allowedOriginPatterns(
                     "https://www.agenorgasparetto.com.br",
@@ -25,8 +23,7 @@ class CorsConfig {
                 .allowCredentials(false)
                 .maxAge(3600)
 
-            // 2) PRIVACY / CONSENT: precisa expor Set-Cookie (o browser pode instalá-lo mesmo sem credentials)
-            // Em produção, chame via mesma origem (rewrites) para evitar CORS; aqui fica restrito por segurança.
+            // 2) Privacy (expor Set-Cookie, sem credentials)
             registry.addMapping("/api/v1/privacy/**")
                 .allowedOriginPatterns(
                     "https://www.agenorgasparetto.com.br",
@@ -39,7 +36,7 @@ class CorsConfig {
                 .allowCredentials(false)
                 .maxAge(3600)
 
-            // 3) REST genérico: mantenha estrito; sem credenciais; sem necessidade de expor Set-Cookie aqui
+            // 3) REST genérico
             registry.addMapping("/api/v1/**")
                 .allowedOriginPatterns(
                     "https://www.agenorgasparetto.com.br",

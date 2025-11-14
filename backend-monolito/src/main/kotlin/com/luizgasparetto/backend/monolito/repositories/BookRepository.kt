@@ -10,8 +10,7 @@ import org.springframework.stereotype.Repository
 @Repository
 interface BookRepository : JpaRepository<Book, String> {
 
-    /** Reserva atômica: debita se (stock >= qty). Retorna linhas afetadas (0/1). */
-    @Modifying
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("""
         UPDATE Book b
            SET b.stock = b.stock - :qty
@@ -20,8 +19,7 @@ interface BookRepository : JpaRepository<Book, String> {
     """)
     fun tryReserve(@Param("id") id: String, @Param("qty") qty: Int): Int
 
-    /** Libera reserva/estoque (usado ao expirar reserva ou cancelar). */
-    @Modifying
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("""
         UPDATE Book b
            SET b.stock = b.stock + :qty
