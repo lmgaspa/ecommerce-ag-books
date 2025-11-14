@@ -20,8 +20,14 @@ export async function getAllBooks(): Promise<Book[] | null> {
   }
 }
 
+/**
+ * Busca informações de um livro por slug
+ * O backend usa slug ao invés de id na URL
+ */
 export async function getStockById(id: string): Promise<StockDTO> {
-  const data = await apiGet<BookFromApi>(`/books/${id}`);
+  // O backend espera slug na URL: /api/v1/books/{slug}
+  // Os IDs locais já são slugs (ex: "extase", "sempre", etc.)
+  const data = await apiGet<BookFromApi>(`/books/${encodeURIComponent(id)}`);
   const stock = typeof data?.stock === "number" ? data.stock : 0;
   return { id: data?.id ?? id, stock, available: stock > 0 };
 }
