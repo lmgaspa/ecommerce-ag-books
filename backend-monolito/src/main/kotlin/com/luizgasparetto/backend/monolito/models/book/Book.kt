@@ -1,44 +1,55 @@
 package com.luizgasparetto.backend.monolito.models.book
 
+import com.luizgasparetto.backend.monolito.models.author.Author
 import jakarta.persistence.Column
 import jakarta.persistence.Entity
+import jakarta.persistence.FetchType
+import jakarta.persistence.ForeignKey
 import jakarta.persistence.Id
+import jakarta.persistence.JoinColumn
+import jakarta.persistence.ManyToOne
 import jakarta.persistence.Table
 
 @Entity
 @Table(name = "books")
 data class Book(
 
-    /** PK é VARCHAR(255). NÃO gere UUID automático aqui, pois você usa slugs como 'extase','sempre'. */
+    /** PK é VARCHAR(255). Usa slug: 'extase','sempre','versos' etc. */
     @Id
     @Column(length = 255, nullable = false)
     val id: String,
 
-    /** No schema é NOT NULL. */
+    /** Coluna textual legada (no CSV / baseline). Continua existindo, mas não é fonte de verdade futura. */
     @Column(nullable = false)
     val author: String,
 
-    /** No schema é NOT NULL. */
     @Column(nullable = false)
     val category: String,
 
-    /** No schema pode ser NULL. */
     @Column(columnDefinition = "TEXT", nullable = true)
     val description: String? = null,
 
-    /** No schema é image_url NOT NULL. */
     @Column(name = "image_url", nullable = false)
     val imageUrl: String,
 
-    /** No schema é double precision NOT NULL. (Se quiser precisão monetária, depois migra para BigDecimal). */
     @Column(nullable = false)
     val price: Double,
 
-    /** No schema é integer NOT NULL. */
     @Column(nullable = false)
     var stock: Int = 0,
 
-    /** No schema é NOT NULL. */
     @Column(nullable = false)
-    val title: String
+    val title: String,
+
+    /**
+     * Novo ponteiro para o autor real (FK authors.id).
+     * O banco já tem a coluna author_id e a FK fk_books_author, então não gera migração nova.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(
+        name = "author_id",
+        referencedColumnName = "id",
+        foreignKey = ForeignKey(name = "fk_books_author")
+    )
+    val authorRef: Author? = null
 )

@@ -7,7 +7,9 @@ import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 
 @Service
-class BookService(private val bookRepository: BookRepository) {
+class BookService(
+    private val bookRepository: BookRepository
+) {
 
     fun getAllBooks(): List<BookDTO> =
         bookRepository.findAll().map { it.toDto() }
@@ -23,13 +25,13 @@ class BookService(private val bookRepository: BookRepository) {
 
     fun validateStock(id: String, amount: Int) {
         val book = getBookById(id)
-        if ((book.stock ?: 0) < amount) {
+        if (book.stock < amount) {
             throw IllegalArgumentException("Estoque insuficiente para o livro '${book.title}'")
         }
     }
 
     fun getImageUrl(bookId: String): String =
-        getBookById(bookId).imageUrl               // se entity for nullable: `?: ""`
+        getBookById(bookId).imageUrl
 
     @Transactional
     fun reserveOrThrow(bookId: String, qty: Int) {
@@ -43,5 +45,16 @@ class BookService(private val bookRepository: BookRepository) {
     @Transactional
     fun release(bookId: String, qty: Int) {
         bookRepository.release(bookId, qty)
+    }
+
+    @Deprecated("Use reserveOrThrow/release no fluxo de reserva TTL")
+    @Transactional
+    fun updateStock(id: String, amount: Int) {
+        val book = getBookById(id)
+        if (book.stock < amount) {
+            throw IllegalArgumentException("Estoque insuficiente para o livro '${book.title}'")
+        }
+        book.stock = book.stock - amount
+        bookRepository.save(book)
     }
 }

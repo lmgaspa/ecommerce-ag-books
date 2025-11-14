@@ -13,11 +13,10 @@ class Author(
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     var id: Long? = null,
 
-    // Obrigatórios: entram no construtor principal
     @Column(nullable = false)
     var name: String,
 
-    @Column(nullable = false) // unicidade garantida só no índice funcional (lower(email))
+    @Column(nullable = false) // unicidade garantida no índice funcional lower(email)
     var email: String,
 
     @CreationTimestamp
@@ -25,7 +24,6 @@ class Author(
     var createdAt: Instant? = null
 
 ) {
-    // no-arg protegido para JPA/Jackson
     protected constructor() : this(
         id = null,
         name = "",
