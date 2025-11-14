@@ -10,8 +10,6 @@ import org.springframework.stereotype.Repository
 @Repository
 interface BookRepository : JpaRepository<Book, String> {
 
-    // ---------- Leitura com autor carregado (painel / vitrine nova) ----------
-
     @Query(
         """
         SELECT b FROM Book b
@@ -29,9 +27,15 @@ interface BookRepository : JpaRepository<Book, String> {
     )
     fun findAllByAuthorIdWithAuthor(@Param("authorId") authorId: Long): List<Book>
 
-    // ---------- Fluxo de estoque atômico (já existente) ----------
+    @Query(
+        """
+        SELECT b FROM Book b
+        JOIN FETCH b.authorRef a
+        WHERE lower(a.email) = :emailLower
+        """
+    )
+    fun findAllByAuthorEmailLower(@Param("emailLower") emailLower: String): List<Book>
 
-    /** Reserva atômica: debita se (stock >= qty). Retorna linhas afetadas (0/1). */
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query(
         """
@@ -43,7 +47,6 @@ interface BookRepository : JpaRepository<Book, String> {
     )
     fun tryReserve(@Param("id") id: String, @Param("qty") qty: Int): Int
 
-    /** Libera reserva/estoque (usado ao expirar reserva ou cancelar). */
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query(
         """
