@@ -1,5 +1,6 @@
 // src/hooks/useCoupon.ts
 import { useState, useEffect } from 'react';
+import { apiGet, apiPost } from '../api/http';
 
 interface CouponState {
   code: string;
@@ -57,24 +58,15 @@ export const useCoupon = () => {
     setIsValidating(true);
 
     try {
-      const API_BASE = import.meta.env.VITE_API_BASE;
-      if (!API_BASE) {
-        throw new Error("VITE_API_BASE não configurado");
-      }
-
-      const response = await fetch(`${API_BASE}/api/coupons/validate`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          code: code.trim(),
-          orderTotal: orderTotal,
-          userEmail: null
-        }),
+      const result = await apiPost<{
+        valid: boolean;
+        discountAmount?: number;
+        errorMessage?: string;
+      }>("/coupons/validate", {
+        code: code.trim(),
+        orderTotal: orderTotal,
+        userEmail: null
       });
-
-      const result = await response.json();
 
       if (result.valid) {
         const newState = {
@@ -147,6 +139,29 @@ export const useCoupon = () => {
     window.dispatchEvent(new CustomEvent('couponChanged'));
   };
 
+  /**
+   * Busca informações de um cupom sem validar (opcional)
+   * Útil para mostrar informações do cupom antes de aplicar
+   */
+  const getCouponInfo = async (code: string): Promise<{
+    exists: boolean;
+    discountAmount?: number;
+    description?: string;
+  } | null> => {
+    if (!code.trim()) return null;
+
+    try {
+      const result = await apiGet<{
+        exists: boolean;
+        discountAmount?: number;
+        description?: string;
+      }>(`/coupons/${encodeURIComponent(code.trim())}`);
+      return result;
+    } catch {
+      return null;
+    }
+  };
+
   const getDiscountAmount = (subtotal: number): number => {
     if (!couponState.isValid) return 0;
     
@@ -167,6 +182,7 @@ export const useCoupon = () => {
     inputValue,
     setInputValue,
     applyCoupon,
+    getCouponInfo,
     clearCoupon,
     getDiscountAmount,
     isValidating,

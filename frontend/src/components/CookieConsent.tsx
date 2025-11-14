@@ -1,13 +1,37 @@
 // src/components/CookieConsent.tsx
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
+import { apiGet, apiPost } from "../api/http";
 
 export default function CookieConsent() {
   const [visible, setVisible] = useState(false);
 
+  // Verificar consentimento no backend ao carregar
   useEffect(() => {
-    const consent = document.cookie.includes("cookie_consent=true");
-    if (!consent) setVisible(true);
+    const checkConsent = async () => {
+      try {
+        // Tenta buscar consentimento do backend
+        const response = await apiGet<{ consented: boolean }>("/privacy/consent");
+        if (response.consented) {
+          // Se já tem consentimento no backend, sincroniza localmente
+          const isLocalhost =
+            window.location.hostname === "localhost" ||
+            window.location.hostname === "127.0.0.1";
+          const extra = isLocalhost ? "SameSite=Lax;" : "Secure; SameSite=None;";
+          document.cookie = `cookie_consent=true; max-age=31536000; path=/; ${extra}`;
+          setVisible(false);
+          return;
+        }
+      } catch {
+        // Se API falhar, usa apenas cookie local como fallback
+      }
+      
+      // Fallback: verifica cookie local
+      const consent = document.cookie.includes("cookie_consent=true");
+      if (!consent) setVisible(true);
+    };
+
+    checkConsent();
   }, []);
 
   const setCookie = (value: "true" | "false") => {
@@ -32,16 +56,30 @@ export default function CookieConsent() {
     window.dispatchEvent(new Event("cookie-consent-changed"));
   };
 
-  const acceptCookies = () => {
+  const acceptCookies = async () => {
     setCookie("true");
     notifyGate("true");
     setVisible(false);
+    
+    // Notifica backend sobre consentimento
+    try {
+      await apiPost("/privacy/consent", { consented: true });
+    } catch {
+      // Silencioso - não bloqueia a UX se API falhar
+    }
   };
 
-  const declineCookies = () => {
+  const declineCookies = async () => {
     setCookie("false");
     notifyGate("false");
     setVisible(false);
+    
+    // Notifica backend sobre recusa
+    try {
+      await apiPost("/privacy/consent", { consented: false });
+    } catch {
+      // Silencioso - não bloqueia a UX se API falhar
+    }
   };
 
   if (!visible) return null;

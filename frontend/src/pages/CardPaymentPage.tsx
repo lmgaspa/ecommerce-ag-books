@@ -14,6 +14,7 @@ import {
 import { cookieStorage } from "../utils/cookieUtils";
 import { analytics, mapCartItems } from "../analytics";
 import { useCoupon } from "../hooks/useCoupon";
+import { apiPost } from "../api/http";
 
 /* ===================== Local types & helpers ===================== */
 
@@ -75,12 +76,7 @@ const EFI_ENV: "production" | "sandbox" =
     ? "sandbox"
     : "production";
 
-const RAW_API_BASE = ENV.VITE_API_BASE;
-const API_BASE = RAW_API_BASE ? String(RAW_API_BASE).replace(/\/+$/, "") : "";
-
-if (!API_BASE) {
-  throw new Error("VITE_API_BASE não configurado. Configure a variável de ambiente.");
-}
+// API_BASE não é mais necessário - usando apiPost do http.ts que já gerencia /api/v1
 
 /* ---------- Formatting helpers ---------- */
 function formatCardNumber(value: string, brand: BrandUI): string {
@@ -403,18 +399,10 @@ export default function CardPaymentPage() {
         couponCode: couponCode || null,
       };
 
-      const res = await fetch(`${API_BASE}/api/checkout/card`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      if (!res.ok) {
-        const txt = await res.text();
-        throw new Error(txt || `HTTP ${res.status} while charging`);
-      }
-
-      const data: CardCheckoutResponse = await res.json();
+      const data: CardCheckoutResponse = await apiPost<CardCheckoutResponse>(
+        "/checkout/card",
+        payload
+      );
       setCheckoutResponse(data);
 
       // Clear cart on success path

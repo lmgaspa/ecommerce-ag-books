@@ -1,16 +1,37 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import type { Book } from "../data/books";
-import { books } from "../data/books";
+import { books as localBooks } from "../data/books";
 import { useCart } from "../hooks/useCart";
 import { useStockByIds } from "../hooks/useStockByIds";
+import { getAllBooks } from "../api/stock";
 
 const BooksListPage = () => {
   const navigate = useNavigate();
   const { addToCart } = useCart();
   const [quantity, setQuantity] = useState<Record<string, number>>({});
-  const ids = useMemo(() => books.map(b => b.id), []);
-  const { data: stockMap, loading } = useStockByIds(ids);
+  const [books, setBooks] = useState<Book[]>(localBooks);
+  const [loadingBooks, setLoadingBooks] = useState(true);
+
+  // Buscar livros da API ao carregar
+  useEffect(() => {
+    const fetchBooks = async () => {
+      setLoadingBooks(true);
+      const apiBooks = await getAllBooks();
+      if (apiBooks && apiBooks.length > 0) {
+        setBooks(apiBooks);
+      } else {
+        // Fallback para dados locais se API falhar
+        setBooks(localBooks);
+      }
+      setLoadingBooks(false);
+    };
+    fetchBooks();
+  }, []);
+
+  const ids = useMemo(() => books.map(b => b.id), [books]);
+  const { data: stockMap, loading: loadingStock } = useStockByIds(ids);
+  const loading = loadingBooks || loadingStock;
 
   const handleAddToCart = (book: Book) => {
     const real = stockMap[book.id]?.stock;

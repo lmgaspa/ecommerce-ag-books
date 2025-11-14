@@ -8,10 +8,10 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
     proxy: {
-      '/api': {
+      '/api/v1': {
         target: 'http://localhost:8080',
         changeOrigin: true
-        // sem rewrite => preserva o prefixo /api
+        // sem rewrite => preserva o prefixo /api/v1
       }
     }
   }

@@ -8,13 +8,7 @@ import { cookieStorage } from "../utils/cookieUtils";
 import type { CheckoutFormData } from "../types/CheckoutTypes";
 import { mapCartItems } from "../analytics";
 import { useCoupon } from "../hooks/useCoupon";
-
-const RAW_API_BASE = import.meta.env.VITE_API_BASE;
-const API_BASE = RAW_API_BASE ? String(RAW_API_BASE).replace(/\/+$/, "") : "";
-
-if (!API_BASE) {
-  throw new Error("VITE_API_BASE não configurado. Configure a variável de ambiente.");
-}
+import { apiPost, buildApiUrl } from "../api/http";
 
 function formatMMSS(totalSec: number) {
   const m = Math.floor(totalSec / 60);
@@ -218,25 +212,10 @@ export default function PixPaymentPage() {
           couponCode: couponCode || null,
         };
 
-        const res = await fetch(`${API_BASE}/api/checkout/pix`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        });
-
-        if (!res.ok) {
-          const text = await res.text();
-          if (res.status === 409 || res.status === 422) {
-            setErrorMsg(
-              "Indisponível no momento. Outro cliente reservou este item."
-            );
-            setTimeout(() => navigate("/"), 2000);
-            return;
-          }
-          throw new Error(text || `Erro HTTP ${res.status}`);
-        }
-
-        const data: PixCheckoutResponse = await res.json();
+        const data: PixCheckoutResponse = await apiPost<PixCheckoutResponse>(
+          "/checkout/pix",
+          payload
+        );
         setCheckoutData(data);
 
         const img = (data.qrCodeBase64 || "").startsWith("data:image")
@@ -263,6 +242,16 @@ export default function PixPaymentPage() {
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : String(e);
         console.error(msg);
+        
+        // Tratar erros específicos 409/422
+        if (msg.includes("409") || msg.includes("422")) {
+          setErrorMsg(
+            "Indisponível no momento. Outro cliente reservou este item."
+          );
+          setTimeout(() => navigate("/"), 2000);
+          return;
+        }
+        
         setErrorMsg(msg || "Erro ao gerar QR Code.");
       } finally {
         if (isMountedRef.current) setLoading(false);
@@ -307,7 +296,7 @@ export default function PixPaymentPage() {
   const connectSSE = useCallback(
     (id: string) => {
       closeSSE();
-      const url = `${API_BASE}/api/orders/${id}/events`;
+      const url = buildApiUrl(`/orders/${id}/events`);
       const es = new EventSource(url, { withCredentials: false });
       sseRef.current = es;
 
