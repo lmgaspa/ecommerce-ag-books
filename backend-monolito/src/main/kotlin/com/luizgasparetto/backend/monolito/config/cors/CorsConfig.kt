@@ -48,19 +48,6 @@ class CorsConfig {
                 .exposedHeaders("Content-Type")
                 .allowCredentials(false)
                 .maxAge(3600)
-
-            // 4) Compatibilidade temporária - rotas antigas /api/books/**
-            registry.addMapping("/api/books/**")
-                .allowedOriginPatterns(
-                    "https://www.agenorgasparetto.com.br",
-                    "https://agenorgasparetto.com.br",
-                    "http://localhost:5173"
-                )
-                .allowedMethods("GET", "OPTIONS")
-                .allowedHeaders("Accept", "Content-Type")
-                .exposedHeaders("Content-Type")
-                .allowCredentials(false)
-                .maxAge(3600)
         }
     }
 }
