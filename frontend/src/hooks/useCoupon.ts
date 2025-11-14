@@ -69,9 +69,11 @@ export const useCoupon = () => {
       });
 
       if (result.valid) {
-        const newState = {
+        // Garantir que discountAmount seja sempre um número
+        const discountValue = result.discountAmount ?? 0;
+        const newState: CouponState = {
           code: code.trim().toUpperCase(),
-          discount: result.discountAmount,
+          discount: discountValue,
           isValid: true,
         };
         

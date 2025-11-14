@@ -5,6 +5,7 @@ import { books as localBooks } from "../data/books";
 import { useCart } from "../hooks/useCart";
 import { useStockByIds } from "../hooks/useStockByIds";
 import { getAllBooks } from "../api/stock";
+import BookPrice from "../components/common/BookPrice";
 
 const BooksListPage = () => {
   const navigate = useNavigate();
@@ -66,7 +67,9 @@ const BooksListPage = () => {
             <div key={book.id} className="bg-background rounded-md shadow-md p-4">
               <img src={book.imageUrl} alt={book.title} className="w-full max-w-xs rounded-md shadow-md mb-4" />
               <h2 className="text-2xl font-semibold text-primary mb-1">{book.title}</h2>
-              <p className="text-lg text-secondary mb-2">{book.price}</p>
+              <p className="text-lg text-secondary mb-2">
+                <BookPrice price={book.price} />
+              </p>
 
               <p className="text-sm text-text-secondary mb-3">
                 <span dangerouslySetInnerHTML={{ __html: book.description }} />

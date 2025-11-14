@@ -8,6 +8,7 @@ import RelatedBooks from "./RelatedBooks";
 import AuthorInfo from "./AuthorInfo";
 import ButtonCountCart from "../cart/ButtonCountCart";
 import { useCart } from "../../hooks/useCart";
+import BookPrice from "../common/BookPrice";
 
 type BookDetailsProps = Book;
 
@@ -67,7 +68,9 @@ const BookDetails = ({
           <h1 className="text-4xl font-bold text-primary mb-4">{title}</h1>
 
           <div className="flex items-center gap-3 mb-2">
-            <p className="text-3xl text-secondary font-semibold">{price}</p>
+            <p className="text-3xl text-secondary font-semibold">
+              <BookPrice price={price} />
+            </p>
             {!isAvailable ? (
               <span className="px-3 py-1 text-sm bg-gray-300 text-gray-800 rounded">Esgotado</span>
             ) : lowStock ? (

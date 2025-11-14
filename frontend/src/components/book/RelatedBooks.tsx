@@ -2,6 +2,7 @@ import React from "react";
 import { useNavigate } from "react-router-dom";
 import type { Book } from "../../data/books";
 import { useStockByIds } from "../../hooks/useStockByIds";
+import BookPrice from "../common/BookPrice";
 
 type Props = { relatedBooks: Book["relatedBooks"] };
 
@@ -54,7 +55,9 @@ const RelatedBooks: React.FC<Props> = ({ relatedBooks }) => {
               <div className="p-4 text-center">
                 <h3 className="text-md font-semibold text-primary uppercase">{book.category}</h3>
                 <h4 className="text-lg font-bold text-primary mt-1 line-clamp-2">{book.title}</h4>
-                <p className="text-secondary font-semibold mt-1">{book.price}</p>
+                <p className="text-secondary font-semibold mt-1">
+                  <BookPrice price={book.price} />
+                </p>
               </div>
 
               <div className="px-4 pb-4">
