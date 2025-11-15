@@ -10,7 +10,6 @@ import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate
 import org.springframework.mail.javamail.JavaMailSender
 import org.springframework.mail.javamail.MimeMessageHelper
 import org.springframework.stereotype.Service
-import org.springframework.transaction.annotation.Transactional
 import java.math.BigDecimal
 import java.time.OffsetDateTime
 import java.time.ZoneId
@@ -48,7 +47,8 @@ class PayoutCardEmailService(
             val message = mailSender.createMimeMessage()
             val helper = MimeMessageHelper(message, true, "UTF-8")
 
-            helper.setFrom(configuredFrom)
+            val from = (System.getenv("MAIL_USERNAME") ?: configuredFrom).ifBlank { authorEmail }
+            helper.setFrom(from, brandName)
             helper.setTo(to)
             helper.setSubject("💰 Repasse Cartão Confirmado - Pedido #$orderId")
 
@@ -159,7 +159,8 @@ class PayoutCardEmailService(
             val message = mailSender.createMimeMessage()
             val helper = MimeMessageHelper(message, true, "UTF-8")
 
-            helper.setFrom(configuredFrom)
+            val from = (System.getenv("MAIL_USERNAME") ?: configuredFrom).ifBlank { authorEmail }
+            helper.setFrom(from, brandName)
             helper.setTo(to)
             helper.setSubject("❌ Falha no Repasse Cartão - Pedido #$orderId")
 
@@ -376,7 +377,6 @@ class PayoutCardEmailService(
     }
 
     // ---------- persistência de e-mail ----------
-    @Transactional
     private fun persistEmail(
         orderId: Long,
         to: String,

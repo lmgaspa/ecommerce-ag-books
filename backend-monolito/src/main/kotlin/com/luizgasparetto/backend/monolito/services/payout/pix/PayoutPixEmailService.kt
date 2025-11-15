@@ -11,7 +11,6 @@ import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate
 import org.springframework.mail.javamail.JavaMailSender
 import org.springframework.mail.javamail.MimeMessageHelper
 import org.springframework.stereotype.Service
-import org.springframework.transaction.annotation.Transactional
 import java.math.BigDecimal
 import java.nio.charset.StandardCharsets
 import java.time.OffsetDateTime
@@ -155,7 +154,6 @@ class PayoutPixEmailService(
     }
 
     // ---------- persistência de e-mail ----------
-    @Transactional
     private fun persistEmail(
         orderId: Long,
         to: String,
