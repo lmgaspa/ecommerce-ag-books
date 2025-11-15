@@ -1,4 +1,3 @@
-// src/main/kotlin/com/luizgasparetto/backend/monolito/services/payout/pix/PayoutPixEmailService.kt
 package com.luizgasparetto.backend.monolito.services.payout.pix
 
 import com.luizgasparetto.backend.monolito.models.payout.PayoutEmail
@@ -15,8 +14,8 @@ import java.math.BigDecimal
 import java.nio.charset.StandardCharsets
 import java.time.OffsetDateTime
 import java.time.ZoneId
-import java.time.format.DateTimeFormatter
 import java.time.Year
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 @Service
@@ -30,14 +29,20 @@ class PayoutPixEmailService(
     @Value("\${mail.from:}") private val configuredFrom: String,
     @Value("\${mail.logo.url:https://www.andescoresoftware.com.br.jpg}") private val logoUrl: String,
     @Value("\${application.timezone:America/Bahia}") private val appTz: String,
-    // >>> CPF/Chave Pix do favorecido (global). Pode ser vazio; pode ser sobrescrito por parâmetro nos métodos.
-    @Value("\${efi.payout.favored-key:}") private val favoredKeyFromConfig: String
+    @Value("\${efi.payout.favored-key:}") private val favoredKeyFromConfig: String,
+    @Value("\${efi.pix.sandbox:false}") private val sandbox: Boolean,
+    @Value("\${mail.host:}") private val mailHost: String
 ) {
-    private val log = LoggerFactory.getLogger(PayoutPixEmailService::class.java)
-    private val fmtDateTime: DateTimeFormatter =
-        DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm:ss", Locale("pt","BR"))
 
-    // ---------- público: sucesso ----------
+    private val log = LoggerFactory.getLogger(javaClass)
+
+    private val fmtDateTime: DateTimeFormatter =
+        DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm:ss", Locale.forLanguageTag("pt-BR"))
+
+    // ----------------------------------------------------------------
+    // PÚBLICO: SUCESSO
+    // ----------------------------------------------------------------
+
     fun sendPayoutConfirmedEmail(
         orderId: Long,
         amount: BigDecimal,
@@ -47,10 +52,27 @@ class PayoutPixEmailService(
         txid: String? = null,
         efetivadoEm: OffsetDateTime? = OffsetDateTime.now(ZoneId.of(appTz)),
         extraNote: String? = null,
-        to: String = authorEmail               // pode sobrescrever para multi-autor
+        to: String = authorEmail              // pode sobrescrever para multi-autor
     ) {
+        val from = resolveFrom()
+
+        log.info(
+            "📧 PAYOUT PIX EMAIL [CONFIRMED]: iniciando envio - orderId={}, to={}, sandbox={}, mailHost={}",
+            orderId, to, sandbox, mailHost
+        )
+        log.debug(
+            "📧 PAYOUT PIX EMAIL [CONFIRMED]: config -> from={}, authorEmail={}, appTz={}, favoredKeyFromConfig={}, logoUrl={}",
+            from, authorEmail, appTz, favoredKeyFromConfig, logoUrl
+        )
+
         val key = (payeePixKey ?: favoredKeyFromConfig).orEmpty()
         val subject = "✅ Repasse PIX confirmado (#$orderId) — $brandName"
+        val whenStr = efetivadoEm
+            ?.atZoneSameInstant(ZoneId.of(appTz))
+            ?.toLocalDateTime()
+            ?.format(fmtDateTime)
+            ?: ""
+
         val html = buildHtml(
             success = true,
             orderId = orderId,
@@ -59,12 +81,25 @@ class PayoutPixEmailService(
             idEnvio = idEnvio,
             endToEndId = endToEndId,
             txid = txid,
-            whenStr = efetivadoEm?.atZoneSameInstant(ZoneId.of(appTz))?.toLocalDateTime()?.format(fmtDateTime) ?: "",
+            whenStr = whenStr,
             errorCode = null,
             errorMsg = null,
             note = extraNote
         )
-        val success = send(to, subject, html, orderId, PayoutEmailType.REPASSE_PIX)
+
+        val success = sendInternal(
+            to = to,
+            subject = subject,
+            html = html,
+            orderId = orderId,
+            context = "CONFIRMED"
+        )
+
+        log.debug(
+            "📧 PAYOUT PIX EMAIL [CONFIRMED]: resultado do envio - orderId={}, success={}, sandbox={}",
+            orderId, success, sandbox
+        )
+
         persistEmail(
             orderId = orderId,
             to = to,
@@ -74,7 +109,10 @@ class PayoutPixEmailService(
         )
     }
 
-    // ---------- público: falha ----------
+    // ----------------------------------------------------------------
+    // PÚBLICO: FALHA
+    // ----------------------------------------------------------------
+
     fun sendPayoutFailedEmail(
         orderId: Long,
         amount: BigDecimal,
@@ -88,8 +126,25 @@ class PayoutPixEmailService(
         triedAt: OffsetDateTime? = OffsetDateTime.now(ZoneId.of(appTz)),
         extraNote: String? = null
     ) {
+        val from = resolveFrom()
+
+        log.info(
+            "📧 PAYOUT PIX EMAIL [FAILED]: iniciando envio - orderId={}, to={}, sandbox={}, mailHost={}, errorCode={}",
+            orderId, to, sandbox, mailHost, errorCode
+        )
+        log.debug(
+            "📧 PAYOUT PIX EMAIL [FAILED]: config -> from={}, authorEmail={}, appTz={}, favoredKeyFromConfig={}",
+            from, authorEmail, appTz, favoredKeyFromConfig
+        )
+
         val key = (payeePixKey ?: favoredKeyFromConfig).orEmpty()
         val subject = "❌ Repasse PIX não realizado (#$orderId) — $brandName"
+        val whenStr = triedAt
+            ?.atZoneSameInstant(ZoneId.of(appTz))
+            ?.toLocalDateTime()
+            ?.format(fmtDateTime)
+            ?: ""
+
         val html = buildHtml(
             success = false,
             orderId = orderId,
@@ -98,19 +153,32 @@ class PayoutPixEmailService(
             idEnvio = idEnvio,
             endToEndId = endToEndId,
             txid = txid,
-            whenStr = triedAt?.atZoneSameInstant(ZoneId.of(appTz))?.toLocalDateTime()?.format(fmtDateTime) ?: "",
+            whenStr = whenStr,
             errorCode = errorCode,
             errorMsg = errorMsg,
             note = extraNote
         )
-        val success = send(to, subject, html, orderId, PayoutEmailType.REPASSE_PIX)
-        // Para e-mails de falha, sempre registramos como FAILED se não conseguir enviar
+
+        val success = sendInternal(
+            to = to,
+            subject = subject,
+            html = html,
+            orderId = orderId,
+            context = "FAILED"
+        )
+
+        log.debug(
+            "📧 PAYOUT PIX EMAIL [FAILED]: resultado do envio de falha - orderId={}, success={}, sandbox={}",
+            orderId, success, sandbox
+        )
+
         val finalStatus = if (success) PayoutEmailStatus.SENT else PayoutEmailStatus.FAILED
         val finalErrorMessage = if (!success) {
-            "Erro ao enviar e-mail de falha: ${errorMsg}"
+            "Erro ao enviar e-mail de falha: $errorMsg"
         } else {
-            errorMsg  // Mantém a mensagem de erro original do repasse
+            errorMsg // mantém a mensagem original do repasse
         }
+
         persistEmail(
             orderId = orderId,
             to = to,
@@ -120,40 +188,74 @@ class PayoutPixEmailService(
         )
     }
 
-    // ---------- core mail ----------
-    private fun send(to: String, subject: String, html: String, orderId: Long, emailType: PayoutEmailType): Boolean {
+    // ----------------------------------------------------------------
+    // CORE MAIL (envio real) - sem spring.mail.*, só env + mail.from
+    // ----------------------------------------------------------------
+
+    private fun sendInternal(
+        to: String,
+        subject: String,
+        html: String,
+        orderId: Long,
+        context: String
+    ): Boolean {
+        val from = resolveFrom()
         val msg = mailSender.createMimeMessage()
-        val helper = MimeMessageHelper(msg, /* multipart = */ false, StandardCharsets.UTF_8.name())
-        val from = (System.getenv("MAIL_USERNAME") ?: configuredFrom).ifBlank { authorEmail }
+        val helper = MimeMessageHelper(msg, false, StandardCharsets.UTF_8.name())
+
+        log.debug(
+            "📧 PAYOUT PIX EMAIL [{}]: configurando MimeMessage - orderId={}, from={}, to={}, subject={}, sandbox={}, mailHost={}",
+            context, orderId, from, to, subject, sandbox, mailHost
+        )
+
         helper.setFrom(from, brandName)
         helper.setTo(to)
         helper.setSubject(subject)
         helper.setText(html, true)
+
         return try {
+            log.info(
+                "📧 PAYOUT PIX EMAIL [{}]: tentando enviar - orderId={}, sandbox={}",
+                context, orderId, sandbox
+            )
             mailSender.send(msg)
-            log.info("MAIL Repasse PIX enviado -> {}", to)
+            log.info(
+                "✅ PAYOUT PIX EMAIL [{}]: enviado com sucesso -> {} (orderId={}, sandbox={})",
+                context, to, orderId, sandbox
+            )
             true
         } catch (e: Exception) {
-            log.error("MAIL Repasse PIX ERRO para {}: {}", to, e.message, e)
+            log.error(
+                "❌ PAYOUT PIX EMAIL [{}]: erro ao enviar para {} (orderId={}, sandbox={}, mailHost={}): {}",
+                context, to, orderId, sandbox, mailHost, e.message, e
+            )
             false
         }
     }
 
-    // ---------- helper: busca payout_id a partir de order_id ----------
+    // ----------------------------------------------------------------
+    // BUSCA payout_id POR order_id
+    // ----------------------------------------------------------------
+
     private fun findPayoutIdByOrderId(orderId: Long): Long? {
         return try {
             val row = jdbc.queryForMap(
                 "SELECT id FROM payment_payouts WHERE order_id = :orderId LIMIT 1",
                 mapOf("orderId" to orderId)
             )
-            (row["id"] as? Number)?.toLong()
+            val id = (row["id"] as? Number)?.toLong()
+            log.debug("PayoutEmail [PIX]: payout encontrado para orderId={} -> payoutId={}", orderId, id)
+            id
         } catch (e: Exception) {
-            log.warn("PayoutEmail: payout não encontrado para orderId={}: {}", orderId, e.message)
+            log.warn("PayoutEmail [PIX]: payout não encontrado para orderId={}: {}", orderId, e.message)
             null
         }
     }
 
-    // ---------- persistência de e-mail ----------
+    // ----------------------------------------------------------------
+    // PERSISTÊNCIA DE E-MAIL
+    // ----------------------------------------------------------------
+
     private fun persistEmail(
         orderId: Long,
         to: String,
@@ -162,33 +264,40 @@ class PayoutPixEmailService(
         errorMessage: String? = null
     ) {
         try {
-            // Busca payout_id se existir (pode ser NULL para e-mails agendados)
             val payoutId = findPayoutIdByOrderId(orderId)
 
-            // SEMPRE persiste o e-mail, mesmo sem payout_id (para segurança e auditoria)
             val payoutEmail = PayoutEmail(
-                payoutId = payoutId,  // Pode ser NULL
-                orderId = orderId,    // Sempre preenchido
+                payoutId = payoutId,
+                orderId = orderId,
                 toEmail = to,
                 emailType = emailType.name,
                 sentAt = OffsetDateTime.now(),
                 status = status,
                 errorMessage = errorMessage
             )
+
             payoutEmailRepository.save(payoutEmail)
-            
+
             if (payoutId != null) {
-                log.debug("PayoutEmail: persistido orderId={} payoutId={} type={} status={}", orderId, payoutId, emailType, status)
+                log.debug(
+                    "PayoutEmail [PIX]: persistido (com payoutId) orderId={} payoutId={} type={} status={} error={}",
+                    orderId, payoutId, emailType, status, errorMessage
+                )
             } else {
-                log.debug("PayoutEmail: persistido orderId={} (sem payout_id ainda) type={} status={}", orderId, emailType, status)
+                log.debug(
+                    "PayoutEmail [PIX]: persistido (sem payoutId) orderId={} type={} status={} error={}",
+                    orderId, emailType, status, errorMessage
+                )
             }
         } catch (e: Exception) {
-            // Não quebra o fluxo se falhar ao persistir o log de e-mail
-            log.error("PayoutEmail: erro ao persistir e-mail para orderId={}: {}", orderId, e.message, e)
+            log.error("PayoutEmail [PIX]: erro ao persistir e-mail para orderId={}: {}", orderId, e.message, e)
         }
     }
 
-    // ---------- HTML ----------
+    // ----------------------------------------------------------------
+    // HTML (sucesso / falha)
+    // ----------------------------------------------------------------
+
     private fun buildHtml(
         success: Boolean,
         orderId: Long,
@@ -203,35 +312,52 @@ class PayoutPixEmailService(
         note: String?
     ): String {
         val valorFmt = "R$ %s".format(amount.setScale(2).toPlainString())
-        val statusLine = if (success)
+
+        val statusLine = if (success) {
             "<p style=\"margin:0 0 6px\">🎉 <strong>Repasse PIX realizado com sucesso.</strong></p>"
-        else
+        } else {
             "<p style=\"margin:0 0 6px\">❌ <strong>Repasse PIX não realizado.</strong></p>"
+        }
 
         val cpfFmt = formatCpfIfPossible(payeePixKey)
-        val favorecidoLine = if (cpfFmt != null)
+        val favorecidoLine = if (cpfFmt != null) {
             "<p style=\"margin:6px 0\"><strong>👤 Favorecido (CPF):</strong> $cpfFmt</p>"
-        else
+        } else {
             "<p style=\"margin:6px 0\"><strong>🎯 Favorecido (chave Pix):</strong> ${escape(payeePixKey)}</p>"
+        }
 
         val extraOk = if (success) buildString {
-            txid?.takeIf { it.isNotBlank() }?.let { append("<p style='margin:4px 0'><strong>🔑 TXID:</strong> ${escape(it)}</p>") }
-            endToEndId?.takeIf { it.isNotBlank() }?.let { append("<p style='margin:4px 0'><strong>🔗 EndToEndId:</strong> ${escape(it)}</p>") }
+            txid?.takeIf { it.isNotBlank() }?.let {
+                append("<p style='margin:4px 0'><strong>🔑 TXID:</strong> ${escape(it)}</p>")
+            }
+            endToEndId?.takeIf { it.isNotBlank() }?.let {
+                append("<p style='margin:4px 0'><strong>🔗 EndToEndId:</strong> ${escape(it)}</p>")
+            }
         } else ""
 
-        val extraErr = if (!success) """
+        val extraErr = if (!success) {
+            """
             <p style="margin:4px 0"><strong>Erro:</strong> ${escape(errorCode ?: "desconhecido")}</p>
-            ${errorMsg?.let { "<p style='margin:4px 0;color:#a00'>${escape(it)}</p>" } ?: ""}
-        """.trimIndent() else ""
+            ${
+                errorMsg?.let {
+                    "<p style='margin:4px 0;color:#a00'>${escape(it)}</p>"
+                } ?: ""
+            }
+            """.trimIndent()
+        } else ""
 
-        val noteBlock = note?.takeIf { it.isNotBlank() }?.let {
-            """<p style="margin:10px 0 0"><strong>📝 Observação:</strong><br>${escape(it)}</p>"""
-        } ?: ""
+        val noteBlock = note
+            ?.takeIf { it.isNotBlank() }
+            ?.let {
+                """<p style="margin:10px 0 0"><strong>📝 Observação:</strong><br>${escape(it)}</p>"""
+            } ?: ""
 
-        // Buscar informações do cupom do pedido
         val couponBlock = try {
             val order = orderRepository.findById(orderId).orElse(null)
-            if (order?.couponCode != null && order.discountAmount != null && order.discountAmount!! > java.math.BigDecimal.ZERO) {
+            if (order?.couponCode != null &&
+                order.discountAmount != null &&
+                order.discountAmount!! > BigDecimal.ZERO
+            ) {
                 val couponCode = order.couponCode!!
                 val discountAmount = order.discountAmount!!
                 val discountFormatted = "R$ %.2f".format(discountAmount.toDouble())
@@ -244,9 +370,11 @@ class PayoutPixEmailService(
                   <div style="font-weight:700;color:#856404;font-size:18px;">Pagamento reduzido em $discountFormatted</div>
                 </div>
                 """.trimIndent()
-            } else ""
+            } else {
+                ""
+            }
         } catch (e: Exception) {
-            log.warn("Erro ao buscar informações do cupom para pedido $orderId: ${e.message}")
+            log.warn("PayoutEmail [PIX]: erro ao buscar informações do cupom para pedido {}: {}", orderId, e.message)
             ""
         }
 
@@ -308,14 +436,42 @@ class PayoutPixEmailService(
         """.trimIndent()
     }
 
-    // ---------- helpers (OCP-friendly) ----------
+    // ----------------------------------------------------------------
+    // HELPERS
+    // ----------------------------------------------------------------
+
+    /**
+     * Resolve o FROM sem depender de spring.mail.*:
+     * 1) MAIL_USERNAME (env)
+     * 2) mail.from (configuredFrom)
+     * 3) email do autor (authorEmail)
+     */
+    private fun resolveFrom(): String {
+        val fromEnv = System.getenv("MAIL_USERNAME")?.takeIf { it.isNotBlank() }
+        val fromConfig = configuredFrom.takeIf { it.isNotBlank() }
+        val resolved = fromEnv ?: fromConfig ?: authorEmail
+
+        log.debug(
+            "📧 PayoutPixEmailService.resolveFrom(): resolvedFrom='{}' (env='{}', config='{}', author='{}')",
+            resolved, fromEnv, fromConfig, authorEmail
+        )
+
+        return resolved
+    }
+
     private fun escape(s: String): String =
-        s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+        s.replace("&", "&amp;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;")
 
     private fun onlyDigits(s: String): String = s.filter { it.isDigit() }
 
     private fun formatCpfIfPossible(key: String?): String? {
         val d = onlyDigits(key.orEmpty())
-        return if (d.length == 11) "${d.substring(0,3)}.${d.substring(3,6)}.${d.substring(6,9)}-${d.substring(9)}" else null
+        return if (d.length == 11) {
+            "${d.substring(0, 3)}.${d.substring(3, 6)}.${d.substring(6, 9)}-${d.substring(9)}"
+        } else {
+            null
+        }
     }
 }

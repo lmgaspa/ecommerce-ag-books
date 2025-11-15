@@ -233,9 +233,9 @@ val cleanDisabledValue =
         .toBooleanStrictOrNull() ?: true
 
 /* -------- Placeholders -------- */
-val placeholderName  = envOr("Agenor Gasparetto", "SITE_AUTHOR_NAME")
-val placeholderEmail = envOr("ag1957@gmail.com", "SITE_AUTHOR_EMAIL")
-val placeholderPix   = envOr("29322022000", "SITE_AUTHOR_PIX_KEY")
+val placeholderName  = envOr("", "SITE_AUTHOR_NAME")
+val placeholderEmail = envOr("", "SITE_AUTHOR_EMAIL")
+val placeholderPix   = envOr("", "SITE_AUTHOR_PIX_KEY")
 
 flyway {
     url = urlValue

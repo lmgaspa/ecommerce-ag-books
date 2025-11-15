@@ -4,9 +4,9 @@ spring:
     validate-on-migrate: false
     repair-on-migrate: true
     placeholders:
-      SITE_AUTHOR_NAME: ${SITE_AUTHOR_NAME:Agenor Gasparetto}
-      SITE_AUTHOR_EMAIL: ${SITE_AUTHOR_EMAIL:ag1957@gmail.com}
-      SITE_AUTHOR_PIX_KEY: ${SITE_AUTHOR_PIX_KEY:29322022000}
+      SITE_AUTHOR_NAME: ${SITE_AUTHOR_NAME}
+      SITE_AUTHOR_EMAIL: ${SITE_AUTHOR_EMAIL}
+      SITE_AUTHOR_PIX_KEY: ${SITE_AUTHOR_PIX_KEY}
 
   datasource:
     url: ${JDBC_DATABASE_URL:${DATABASE_URL}}        # Heroku injeta DATABASE_URL
@@ -67,6 +67,10 @@ logging:
     com.luizgasparetto.backend.monolito.services.PixWatcher: debug
     com.luizgasparetto.backend.monolito.services.CardWatcher: debug
     com.luizgasparetto.backend.monolito.services.PaymentProcessor: debug
+    org.springframework.mail: DEBUG
+    org.springframework.mail.javamail: DEBUG
+    javax.mail: DEBUG
+    com.luizgasparetto.backend.monolito.services.payout.card: DEBUG
 
 email:
   author: ${EMAIL_AUTHOR}
