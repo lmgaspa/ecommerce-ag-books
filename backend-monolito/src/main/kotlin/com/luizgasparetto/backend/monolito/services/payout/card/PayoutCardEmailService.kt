@@ -1,10 +1,16 @@
 package com.luizgasparetto.backend.monolito.services.payout.card
 
+import com.luizgasparetto.backend.monolito.models.payout.PayoutEmail
+import com.luizgasparetto.backend.monolito.models.payout.PayoutEmailStatus
+import com.luizgasparetto.backend.monolito.models.payout.PayoutEmailType
+import com.luizgasparetto.backend.monolito.repositories.PayoutEmailRepository
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
+import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate
 import org.springframework.mail.javamail.JavaMailSender
 import org.springframework.mail.javamail.MimeMessageHelper
 import org.springframework.stereotype.Service
+import org.springframework.transaction.annotation.Transactional
 import java.math.BigDecimal
 import java.time.OffsetDateTime
 import java.time.ZoneId
@@ -17,6 +23,8 @@ import java.nio.charset.StandardCharsets
 class PayoutCardEmailService(
     private val mailSender: JavaMailSender,
     private val orderRepository: com.luizgasparetto.backend.monolito.repositories.OrderRepository,
+    private val payoutEmailRepository: PayoutEmailRepository,
+    private val jdbc: NamedParameterJdbcTemplate,
     @Value("\${email.author}") private val authorEmail: String,
     @Value("\${application.brand.name:Agenor Gasparetto - E-Commerce}") private val brandName: String,
     @Value("\${mail.from:}") private val configuredFrom: String,
@@ -35,12 +43,13 @@ class PayoutCardEmailService(
         idEnvio: String,
         note: String? = null
     ) {
-        try {
+        val to = authorEmail
+        val success = try {
             val message = mailSender.createMimeMessage()
             val helper = MimeMessageHelper(message, true, "UTF-8")
 
             helper.setFrom(configuredFrom)
-            helper.setTo(authorEmail)
+            helper.setTo(to)
             helper.setSubject("💰 Repasse Cartão Confirmado - Pedido #$orderId")
 
             val maskedKey = payeePixKey?.let { mask(it) } ?: "N/A"
@@ -94,11 +103,20 @@ class PayoutCardEmailService(
             mailSender.send(message)
 
             log.info("PAYOUT CARD EMAIL: enviado com sucesso -> {} (order #{}, amount={}, key={})", 
-                authorEmail, orderId, amountFormatted, maskedKey)
-
+                to, orderId, amountFormatted, maskedKey)
+            true
         } catch (e: Exception) {
             log.error("PAYOUT CARD EMAIL: falha ao enviar (order #{}, amount={}): {}", orderId, amount, e.message)
+            false
         }
+
+        persistEmail(
+            orderId = orderId,
+            to = to,
+            emailType = PayoutEmailType.REPASSE_CARD,
+            status = if (success) PayoutEmailStatus.SENT else PayoutEmailStatus.FAILED,
+            errorMessage = if (!success) "Erro ao enviar e-mail (exceção capturada)" else null
+        )
     }
 
     fun sendPayoutScheduledEmail(
@@ -118,7 +136,14 @@ class PayoutCardEmailService(
             idEnvio = idEnvio,
             note = extraNote
         )
-        send(to, subject, html)
+        val success = send(to, subject, html, orderId)
+        persistEmail(
+            orderId = orderId,
+            to = to,
+            emailType = PayoutEmailType.REPASSE_CARD,
+            status = if (success) PayoutEmailStatus.SENT else PayoutEmailStatus.FAILED,
+            errorMessage = if (!success) "Erro ao enviar e-mail agendado (exceção capturada)" else null
+        )
     }
 
     fun sendPayoutFailedEmail(
@@ -129,12 +154,13 @@ class PayoutCardEmailService(
         errorCode: String,
         errorMessage: String
     ) {
-        try {
+        val to = authorEmail
+        val success = try {
             val message = mailSender.createMimeMessage()
             val helper = MimeMessageHelper(message, true, "UTF-8")
 
             helper.setFrom(configuredFrom)
-            helper.setTo(authorEmail)
+            helper.setTo(to)
             helper.setSubject("❌ Falha no Repasse Cartão - Pedido #$orderId")
 
             val maskedKey = payeePixKey?.let { mask(it) } ?: "N/A"
@@ -192,11 +218,26 @@ class PayoutCardEmailService(
             mailSender.send(message)
 
             log.info("PAYOUT CARD EMAIL: falha enviada -> {} (order #{}, amount={}, error={})", 
-                authorEmail, orderId, amountFormatted, errorCode)
-
+                to, orderId, amountFormatted, errorCode)
+            true
         } catch (e: Exception) {
             log.error("PAYOUT CARD EMAIL: falha ao enviar email de erro (order #{}, amount={}): {}", orderId, amount, e.message)
+            false
         }
+
+        val finalStatus = if (success) PayoutEmailStatus.SENT else PayoutEmailStatus.FAILED
+        val finalErrorMessage = if (!success) {
+            "Erro ao enviar e-mail de falha: $errorMessage"
+        } else {
+            errorMessage
+        }
+        persistEmail(
+            orderId = orderId,
+            to = to,
+            emailType = PayoutEmailType.REPASSE_CARD,
+            status = finalStatus,
+            errorMessage = finalErrorMessage
+        )
     }
 
     private fun buildScheduledHtml(
@@ -302,7 +343,7 @@ class PayoutCardEmailService(
         """.trimIndent()
     }
 
-    private fun send(to: String, subject: String, html: String) {
+    private fun send(to: String, subject: String, html: String, orderId: Long): Boolean {
         val msg = mailSender.createMimeMessage()
         val helper = MimeMessageHelper(msg, /* multipart = */ false, StandardCharsets.UTF_8.name())
         val from = (System.getenv("MAIL_USERNAME") ?: configuredFrom).ifBlank { authorEmail }
@@ -310,11 +351,63 @@ class PayoutCardEmailService(
         helper.setTo(to)
         helper.setSubject(subject)
         helper.setText(html, true)
-        try {
+        return try {
             mailSender.send(msg)
             log.info("MAIL Repasse de Cartão enviado -> {}", to)
+            true
         } catch (e: Exception) {
             log.error("MAIL Repasse de Cartão ERRO para {}: {}", to, e.message, e)
+            false
+        }
+    }
+
+    // ---------- helper: busca payout_id a partir de order_id ----------
+    private fun findPayoutIdByOrderId(orderId: Long): Long? {
+        return try {
+            val row = jdbc.queryForMap(
+                "SELECT id FROM payment_payouts WHERE order_id = :orderId LIMIT 1",
+                mapOf("orderId" to orderId)
+            )
+            (row["id"] as? Number)?.toLong()
+        } catch (e: Exception) {
+            log.warn("PayoutEmail: payout não encontrado para orderId={}: {}", orderId, e.message)
+            null
+        }
+    }
+
+    // ---------- persistência de e-mail ----------
+    @Transactional
+    private fun persistEmail(
+        orderId: Long,
+        to: String,
+        emailType: PayoutEmailType,
+        status: PayoutEmailStatus,
+        errorMessage: String? = null
+    ) {
+        try {
+            // Busca payout_id se existir (pode ser NULL para e-mails agendados)
+            val payoutId = findPayoutIdByOrderId(orderId)
+
+            // SEMPRE persiste o e-mail, mesmo sem payout_id (para segurança e auditoria)
+            val payoutEmail = PayoutEmail(
+                payoutId = payoutId,  // Pode ser NULL
+                orderId = orderId,    // Sempre preenchido
+                toEmail = to,
+                emailType = emailType.name,
+                sentAt = OffsetDateTime.now(),
+                status = status,
+                errorMessage = errorMessage
+            )
+            payoutEmailRepository.save(payoutEmail)
+            
+            if (payoutId != null) {
+                log.debug("PayoutEmail: persistido orderId={} payoutId={} type={} status={}", orderId, payoutId, emailType, status)
+            } else {
+                log.debug("PayoutEmail: persistido orderId={} (sem payout_id ainda) type={} status={}", orderId, emailType, status)
+            }
+        } catch (e: Exception) {
+            // Não quebra o fluxo se falhar ao persistir o log de e-mail
+            log.error("PayoutEmail: erro ao persistir e-mail para orderId={}: {}", orderId, e.message, e)
         }
     }
 
