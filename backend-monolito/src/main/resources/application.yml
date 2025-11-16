@@ -46,6 +46,12 @@ spring:
             enable: true
             required: true
 
+idle:
+  mode:
+    enabled: ${IDLE_MODE:false}
+    wake-on-first-request: ${IDLE_WAKE_ON_FIRST_REQUEST:true}
+    timeout-minutes: ${IDLE_TIMEOUT_MINUTES:20}
+
 server:
   port: ${PORT:${SERVER_PORT:8080}}
   shutdown: graceful
@@ -71,6 +77,8 @@ logging:
     org.springframework.mail.javamail: DEBUG
     javax.mail: DEBUG
     com.luizgasparetto.backend.monolito.services.payout.card: DEBUG
+  group:
+    jobs: com.luizgasparetto.backend.monolito.jobs,com.luizgasparetto.backend.monolito.services.pix,com.luizgasparetto.backend.monolito.services.card
 
 email:
   author: ${EMAIL_AUTHOR}
@@ -148,5 +156,3 @@ bootstrap:
     mode: ${BOOTSTRAP_AUTHOR_MODE:text}      # text | ids
     onlyUnmapped: ${BOOTSTRAP_AUTHOR_ONLY_UNMAPPED:true}
     book-ids: ${BOOTSTRAP_AUTHOR_BOOK_IDS:}  # só se mode=ids
-
-#finished

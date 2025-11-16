@@ -210,11 +210,11 @@ class CardEmailService(
               <p style="margin:12px 0 8px"><strong>🧾 Nº do pedido:</strong> #${escapeHtml(order.id.toString())}</p>
 
               ${if (order.couponCode != null && order.discountAmount != null && order.discountAmount!! > BigDecimal.ZERO) {
-                val couponCode = order.couponCode!!
-                val discountAmount = order.discountAmount!!
-                val discountFormatted = "R$ %.2f".format(discountAmount.toDouble())
-                if (isAuthor) {
-                  """
+            val couponCode = order.couponCode!!
+            val discountAmount = order.discountAmount!!
+            val discountFormatted = "R$ %.2f".format(discountAmount.toDouble())
+            if (isAuthor) {
+                """
                   <!-- CUPOM APLICADO - AUTOR -->
                   <div style="background:#fff3cd;border:1px solid #ffeaa7;border-radius:8px;padding:16px;margin:16px 0;text-align:center;">
                     <div style="color:#856404;font-size:24px;margin-bottom:8px;">🎫</div>
@@ -223,8 +223,8 @@ class CardEmailService(
                     <div style="font-weight:700;color:#856404;font-size:18px;">Pagamento reduzido em $discountFormatted</div>
                   </div>
                   """.trimIndent()
-                } else {
-                  """
+            } else {
+                """
                   <!-- CUPOM APLICADO - CLIENTE -->
                   <div style="background:#f8f9fa;border:1px solid #dee2e6;border-radius:8px;padding:16px;margin:16px 0;text-align:center;">
                     <div style="color:#28a745;font-size:24px;margin-bottom:8px;">🎯</div>
@@ -233,8 +233,8 @@ class CardEmailService(
                     <div style="font-weight:700;color:#28a745;font-size:18px;">Você economizou $discountFormatted! 💰</div>
                   </div>
                   """.trimIndent()
-                }
-              } else ""}
+            }
+        } else ""}
 
               ${if (!declined) """
               <h3 style="font-size:15px;margin:16px 0 8px">🛒 Itens</h3>
