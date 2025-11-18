@@ -4,7 +4,9 @@ package com.luizgasparetto.backend.monolito.controllers.card
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.luizgasparetto.backend.monolito.models.webhook.WebhookEvent
 import com.luizgasparetto.backend.monolito.payments.web.PaymentTriggerService
+import com.luizgasparetto.backend.monolito.models.payout.PayoutEmailType
 import com.luizgasparetto.backend.monolito.repositories.OrderRepository
+import com.luizgasparetto.backend.monolito.repositories.PayoutEmailRepository
 import com.luizgasparetto.backend.monolito.repositories.WebhookEventRepository
 import com.luizgasparetto.backend.monolito.services.card.CardPaymentProcessor
 import com.luizgasparetto.backend.monolito.services.payout.card.PayoutCardEmailService
@@ -24,6 +26,7 @@ class CardEfiWebhookController(
     private val orders: OrderRepository,
     private val processor: CardPaymentProcessor,
     private val webhookRepo: WebhookEventRepository,
+    private val payoutEmailRepo: PayoutEmailRepository,
     // 🔌 Injeção do orquestrador (mantém OCP; decisão de "quando" chamar fica fora do controller)
     private val payoutTrigger: PaymentTriggerService,
     private val payoutCardEmailService: PayoutCardEmailService
@@ -98,21 +101,33 @@ class CardEfiWebhookController(
         val paid = processor.isCardPaidStatus(status)
         val applied = if (paid) processor.markPaidIfNeededByChargeId(chargeId) else false
 
-        // 🔔 EMAIL IMEDIATO (CARTÃO): informa sobre repasse D+31
+        // 🔔 EMAIL IMEDIATO (CARTÃO): informa sobre repasse D+32
+        // Nota: O email já é enviado no CardPaymentProcessor quando o pagamento é confirmado.
+        // Aqui só enviamos se ainda não foi enviado (caso o webhook chegue antes do one-step confirmar).
         if (paid && applied && order.id != null) {
-            runCatching {
-                // Envia email informando que o repasse será processado em 31 dias
-                payoutCardEmailService.sendPayoutScheduledEmail(
-                    orderId = order.id!!,
-                    amount = order.total,
-                    payeePixKey = null, // Será resolvido pelo PaymentTriggerService
-                    idEnvio = "C${order.id}",
-                    extraNote = "Repasse programado para 31 dias (política Efí Bank)"
-                )
-                
-                log.info("CARD PAYOUT EMAIL: Enviado para order #{} (D+31)", order.id)
-            }.onFailure { e ->
-                log.error("CARD WEBHOOK: falha ao enviar email de repasse (orderId={}, chargeId={}): {}", order.id, chargeId, e.message)
+            // Verifica se o email de repasse agendado já foi enviado
+            val alreadySent = payoutEmailRepo.findByOrderIdAndEmailType(
+                order.id!!,
+                PayoutEmailType.REPASSE_CARD.name
+            ).isNotEmpty()
+
+            if (!alreadySent) {
+                runCatching {
+                    // Envia email informando que o repasse será processado em 32 dias
+                    payoutCardEmailService.sendPayoutScheduledEmail(
+                        orderId = order.id!!,
+                        amount = order.total,
+                        payeePixKey = null, // Será resolvido pelo PaymentTriggerService
+                        idEnvio = "C${order.id}",
+                        extraNote = "Repasse programado para 32 dias (política Efí Bank)"
+                    )
+                    
+                    log.info("CARD PAYOUT EMAIL [WEBHOOK]: Enviado para order #{} (D+32)", order.id)
+                }.onFailure { e ->
+                    log.error("CARD WEBHOOK: falha ao enviar email de repasse (orderId={}, chargeId={}): {}", order.id, chargeId, e.message)
+                }
+            } else {
+                log.debug("CARD WEBHOOK: email de repasse agendado já foi enviado para order #{} (ignorando duplicação)", order.id)
             }
         }
 

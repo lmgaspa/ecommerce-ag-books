@@ -42,10 +42,10 @@ class EfiPixSendWebhookController(
             return ResponseEntity.ok().build()
         }
 
-        // lê valores que precisamos para o e-mail (valor líquido e chave pix)
+        // lê valores que precisamos para o e-mail (valor líquido, chave pix e status atual)
         val row = jdbc.queryForMap(
             """
-            SELECT amount_net, pix_key
+            SELECT amount_net, pix_key, status
               FROM payment_payouts
              WHERE order_id=:id
             """.trimIndent(),
@@ -53,31 +53,40 @@ class EfiPixSendWebhookController(
         )
         val amountNet = (row["amount_net"] as? java.math.BigDecimal) ?: BigDecimal.ZERO
         val pixKey = (row["pix_key"] as? String).orEmpty()
+        val currentStatus = (row["status"] as? String).orEmpty()
 
         when (status) {
             "REALIZADO" -> {
-                // marca CONFIRMED
+                // Verifica se já está CONFIRMED para evitar email duplicado
+                val alreadyConfirmed = currentStatus == "CONFIRMED"
+                
+                // marca CONFIRMED (idempotente: se já estiver CONFIRMED, não muda nada)
                 jdbc.update(
                     """UPDATE payment_payouts
-                          SET status='CONFIRMED', confirmed_at=NOW(), provider_ref=:ref
+                          SET status='CONFIRMED', confirmed_at=COALESCE(confirmed_at, NOW()), provider_ref=:ref
                         WHERE order_id=:id""",
                     mapOf("id" to orderId, "ref" to rawIdEnvio)
                 )
-                log.info("Webhook Efí payout: CONFIRMED order #{} idEnvio={} valor={}", orderId, rawIdEnvio, amountNet)
+                
+                if (alreadyConfirmed) {
+                    log.info("Webhook Efí payout: order #{} já estava CONFIRMED (idEnvio={}, valor={}) - ignorando email duplicado", orderId, rawIdEnvio, amountNet)
+                } else {
+                    log.info("Webhook Efí payout: CONFIRMED order #{} idEnvio={} valor={}", orderId, rawIdEnvio, amountNet)
 
-                // dispara e-mail de sucesso
-                runCatching {
-                    mail.sendPayoutConfirmedEmail(
-                        orderId = orderId,
-                        amount = amountNet,
-                        payeePixKey = pixKey,
-                        idEnvio = rawIdEnvio,
-                        endToEndId = endToEndId,
-                        txid = txid,
-                        extraNote = "Confirmação recebida da Efí via webhook."
-                    )
-                }.onFailure { e ->
-                    log.error("MAIL payout CONFIRMED falhou order #{}: {}", orderId, e.message, e)
+                    // dispara e-mail de sucesso (apenas se não estava CONFIRMED antes)
+                    runCatching {
+                        mail.sendPayoutConfirmedEmail(
+                            orderId = orderId,
+                            amount = amountNet,
+                            payeePixKey = pixKey,
+                            idEnvio = rawIdEnvio,
+                            endToEndId = endToEndId,
+                            txid = txid,
+                            extraNote = "Confirmação recebida da Efí via webhook."
+                        )
+                    }.onFailure { e ->
+                        log.error("MAIL payout CONFIRMED falhou order #{}: {}", orderId, e.message, e)
+                    }
                 }
             }
             "NAO_REALIZADO" -> {
