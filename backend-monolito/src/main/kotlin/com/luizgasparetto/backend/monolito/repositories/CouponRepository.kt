@@ -10,6 +10,10 @@ import java.util.Optional
 @Repository
 interface CouponRepository : JpaRepository<Coupon, Long> {
     fun findByCode(code: String): Optional<Coupon>
+    
+    @Query("SELECT c FROM Coupon c WHERE UPPER(c.code) = UPPER(:code)")
+    fun findByCodeIgnoreCase(@Param("code") code: String): Optional<Coupon>
+    
     fun existsByCode(code: String): Boolean
     
     @Query("SELECT c FROM Coupon c WHERE c.code = :code AND c.active = true")

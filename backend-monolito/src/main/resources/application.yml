@@ -156,3 +156,15 @@ bootstrap:
     mode: ${BOOTSTRAP_AUTHOR_MODE:text}      # text | ids
     onlyUnmapped: ${BOOTSTRAP_AUTHOR_ONLY_UNMAPPED:true}
     book-ids: ${BOOTSTRAP_AUTHOR_BOOK_IDS:}  # só se mode=ids
+
+coupon:
+  bonus:
+    enabled: ${COUPON_BONUS_ENABLED:true}
+    code: ${COUPON_BONUS_CODE:}  # Obrigatório se enabled=true - configure no IntelliJ ou env vars
+    name: ${COUPON_BONUS_NAME:}
+    description: ${COUPON_BONUS_DESCRIPTION:}
+    discount-value: ${COUPON_BONUS_DISCOUNT_VALUE:}  # Obrigatório se enabled=true - configure no IntelliJ ou env vars
+    minimum-order-value: ${COUPON_BONUS_MINIMUM_ORDER_VALUE:0.00}
+    valid-from: ${COUPON_BONUS_VALID_FROM:}  # ISO format, vazio = NOW
+    valid-until: ${COUPON_BONUS_VALID_UNTIL:}  # ISO format, vazio = sem expiração
+    active: ${COUPON_BONUS_ACTIVE:true}
