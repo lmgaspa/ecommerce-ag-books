@@ -9,6 +9,7 @@ import com.luizgasparetto.backend.monolito.repositories.OrderRepository
 import com.luizgasparetto.backend.monolito.repositories.WebhookEventRepository
 import com.luizgasparetto.backend.monolito.services.email.PixEmailService
 import com.luizgasparetto.backend.monolito.services.order.OrderEventsPublisher
+import com.luizgasparetto.backend.monolito.payments.web.EfiPixSendWebhookController
 import org.slf4j.LoggerFactory
 import org.springframework.http.ResponseEntity
 import org.springframework.transaction.annotation.Transactional
@@ -28,7 +29,8 @@ class PixEfiWebhookController(
     private val events: OrderEventsPublisher,
     private val webhookRepo: WebhookEventRepository,
     // 🔌 Injeção do orquestrador de repasse (mantém OCP: controller só orquestra, regra fica no serviço)
-    private val payoutTrigger: PaymentTriggerService
+    private val payoutTrigger: PaymentTriggerService,
+    private val payoutWebhook: EfiPixSendWebhookController
 ) {
     private val log = LoggerFactory.getLogger(PixEfiWebhookController::class.java)
 
@@ -53,6 +55,17 @@ class PixEfiWebhookController(
         }
 
         val pix0 = root.path("pix").takeIf { it.isArray && it.size() > 0 }?.get(0)
+        
+        // Detecta se é webhook de repasse (tem idEnvio mas não tem txid)
+        // idEnvio pode estar na raiz, em pix[0], ou em pix[0].gnExtras.idEnvio
+        val idEnvio = when {
+            !root.path("idEnvio").isMissingNode -> root.path("idEnvio").asText()
+            pix0 != null && !pix0.path("idEnvio").isMissingNode -> pix0.path("idEnvio").asText()
+            pix0 != null && !pix0.path("gnExtras").isMissingNode && !pix0.path("gnExtras").path("idEnvio").isMissingNode -> 
+                pix0.path("gnExtras").path("idEnvio").asText()
+            else -> null
+        }?.takeIf { it.isNotBlank() }
+        
         val txid = when {
             !root.path("txid").isMissingNode -> root.path("txid").asText()
             pix0 != null && !pix0.path("txid").isMissingNode -> pix0.path("txid").asText()
@@ -63,6 +76,33 @@ class PixEfiWebhookController(
             !root.path("status").isMissingNode -> root.path("status").asText()
             pix0 != null && !pix0.path("status").isMissingNode -> pix0.path("status").asText()
             else -> null
+        }
+
+        // Se tem idEnvio mas não tem txid, é webhook de repasse - redireciona
+        if (idEnvio != null && txid == null) {
+            log.info("EFI WEBHOOK: detectado webhook de REPASSE (idEnvio={}, status={}) - redirecionando", idEnvio, status)
+            try {
+                // Extrai dados do webhook de repasse
+                val payoutStatus = status?.uppercase() ?: pix0?.path("status")?.asText()?.uppercase()
+                val endToEndId = when {
+                    !root.path("endToEndId").isMissingNode -> root.path("endToEndId").asText()
+                    pix0 != null && !pix0.path("endToEndId").isMissingNode -> pix0.path("endToEndId").asText()
+                    else -> null
+                }
+                
+                // Constrói payload no formato esperado pelo controller de repasse
+                val payload = mutableMapOf<String, Any?>(
+                    "idEnvio" to idEnvio,
+                    "status" to payoutStatus
+                )
+                if (endToEndId != null) payload["endToEndId"] = endToEndId
+                
+                payoutWebhook.onSendWebhook(payload)
+                return ResponseEntity.ok("✅ Webhook de repasse processado")
+            } catch (e: Exception) {
+                log.error("EFI WEBHOOK: falha ao processar webhook de repasse: {}", e.message, e)
+                return ResponseEntity.ok("⚠️ Erro ao processar webhook de repasse")
+            }
         }
 
         // Log/auditoria
