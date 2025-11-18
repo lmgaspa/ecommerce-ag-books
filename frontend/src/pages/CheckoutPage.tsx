@@ -76,6 +76,9 @@ const CheckoutPage = () => {
   const onNavigateBack = () => navigate("/books");
 
   const initializedRef = useRef(false);
+  // GA4: controla se já disparamos o begin_checkout nesta visita.
+  // Extensão de comportamento (analytics) sem alterar o fluxo principal (OCP).
+  const beginCheckoutTrackedRef = useRef(false);
   
   const initializeCart = useCallback(async () => {
     if (initializedRef.current) return; // Evitar múltiplas inicializações
@@ -128,6 +131,31 @@ const CheckoutPage = () => {
     cartItemsRef.current = cartItems;
   }, [cartItems]);
 
+  // GA4: begin_checkout — “Início da finalização da compra”
+  // Disparamos UMA VEZ quando o usuário chega à página de checkout com itens no carrinho.
+  // Isso estende o comportamento com analytics, mantendo o fluxo de negócio intacto (OCP).
+  useEffect(() => {
+    if (beginCheckoutTrackedRef.current) return;
+    if (!cartItems || cartItems.length === 0) return;
+
+    try {
+      const itemsPayload = mapCartItems(cartItems);
+      const value = totalItems + shipping - getDiscountAmount(totalItems);
+
+      analytics.beginCheckout({
+        items: itemsPayload,
+        value: Number(value),
+        currency: "BRL",
+        // no futuro podemos passar cupom, se quiser:
+        // coupon: inputValue || undefined,
+      });
+
+      beginCheckoutTrackedRef.current = true;
+    } catch {
+      // nunca deixamos o fluxo de checkout quebrar por causa de tracking
+    }
+  }, [cartItems, totalItems, shipping, getDiscountAmount]);
+
   // Sincronizar shipping com o valor salvo no formulário
   useEffect(() => {
     if (form.shipping !== undefined && form.shipping !== shipping) {
@@ -167,7 +195,7 @@ const CheckoutPage = () => {
       
       setShipping(v);
 
-      // GA4: add_shipping_info (OCP)
+      // GA4: add_shipping_info (mantido para uso presente/futuro)
       try {
         const itemsPayload = mapCartItems(currentCartItems);
         const orderValue = currentCartItems.reduce(

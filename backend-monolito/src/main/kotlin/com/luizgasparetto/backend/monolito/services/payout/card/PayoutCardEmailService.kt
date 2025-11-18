@@ -386,19 +386,19 @@ class PayoutCardEmailService(
             </div>
 
             <div style="padding:20px">
-              <p style="margin:0 0 6px">📅 <strong>Repasse de Cartão programado para 31 dias.</strong></p>
-              <p style="margin:6px 0;color:#666;font-size:14px;">Por política da Efí Bank, repasses de cartão são processados após 31 dias da aprovação.</p>
+              <p style="margin:0 0 6px">📅 <strong>Repasse de Cartão programado para 32 dias.</strong></p>
+              <p style="margin:6px 0;color:#666;font-size:14px;">Por política da Efí Bank, repasses de cartão são processados após 32 dias da aprovação.</p>
 
               <p style="margin:6px 0"><strong>🧾 Pedido:</strong> #${escape(orderId.toString())}</p>
               <p style="margin:6px 0"><strong>💰 Valor a ser repassado:</strong> $valorFmt</p>
               $favorecidoLine
               <p style="margin:6px 0"><strong>📦 Id do envio:</strong> ${escape(idEnvio)}</p>
-              <p style="margin:6px 0"><strong>📅 Data prevista:</strong> 31 dias após aprovação</p>
+              <p style="margin:6px 0"><strong>📅 Data prevista:</strong> 32 dias após aprovação</p>
 
               <div style="background:#f0f8ff;border-left:4px solid #2196f3;padding:12px;margin:16px 0;">
                 <p style="margin:0;font-size:14px;color:#1976d2;">
                   <strong>ℹ️ Informação importante:</strong><br>
-                  O repasse será processado automaticamente em 31 dias, conforme política da Efí Bank. 
+                  O repasse será processado automaticamente em 32 dias, conforme política da Efí Bank. 
                   Você receberá um novo email quando o repasse for efetivado.
                 </p>
               </div>

@@ -1,5 +1,8 @@
 /* eslint-disable no-var */
 
+// Torna este arquivo um módulo para permitir `declare global`
+export {};
+
 // ====== Tipos comuns (globais para reuso) ======
 declare type EfiEnv = "production" | "sandbox";
 declare type CardBrand = "visa" | "mastercard" | "amex" | "elo" | "diners";
@@ -35,36 +38,12 @@ declare interface TokenizeResult {
 }
 
 // ====== API NPM/ESM/CJS ======
-declare interface EfiCreditCardAPI {
-  // Globais úteis
-  isScriptBlocked(): Promise<boolean>;
-  debugger(enable: boolean): void;
-
-  // Detectar bandeira
-  setCardNumber(cardNumberOnlyDigits: string): EfiCreditCardAPI;
-  verifyCardBrand(): Promise<CardBrand | "unsupported" | "undefined">;
-
-  // Parcelas
-  setAccount(payeeCode: string): EfiCreditCardAPI;
-  setEnvironment(env: EfiEnv): EfiCreditCardAPI;
-  setBrand(brand: CardBrand): EfiCreditCardAPI;
-  setTotal(totalInCents: number): EfiCreditCardAPI;
-  getInstallments(): Promise<InstallmentsResp>;
-
-  // Tokenização
-  setCreditCardData(data: TokenizeInput): EfiCreditCardAPI;
-  getPaymentToken(): Promise<TokenizeResult>;
-}
-
-declare interface EfiPayRoot {
-  CreditCard: EfiCreditCardAPI;
-}
-
-/** Suporte ao import default: `import EfiPay from "payment-token-efi"` */
-declare module "payment-token-efi" {
-  const EfiPay: EfiPayRoot;
-  export default EfiPay;
-}
+// ⚠️ Importante:
+// O pacote `payment-token-efi` já fornece suas próprias definições de tipo
+// em `node_modules/payment-token-efi/types/payment-token-efi.d.ts`.
+// Para evitar erro "Duplicate identifier 'EfiPay'",
+// NÃO redefinimos o módulo aqui.
+// Se você precisar dos tipos do EfiPay via import, use-os direto do pacote.
 
 // ====== Modo CDN/jQuery ($gn.ready) - opcional ======
 declare interface GnTokenWrapped {

@@ -15,7 +15,7 @@ data class EfiPayoutProps(
     val fees: Fees = Fees(),
     val behavior: Behavior = Behavior()
 ) {
-    data class Delay(val cardDays: Int = 30, val pixMinutes: Int = 0)
+    data class Delay(val cardDays: Int = 32, val pixMinutes: Int = 0)
     data class Fees(val includeGatewayFees: Boolean = true)
     data class Behavior(val onePayoutPerAuthorPerOrder: Boolean = true)
 }

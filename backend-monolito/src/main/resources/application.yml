@@ -99,18 +99,18 @@ efi:
     client-id: ${EFI_CARD_CLIENT_ID}
     client-secret: ${EFI_CARD_CLIENT_SECRET}
     sandbox: false
-  payout:
-    favored-key: ${EFI_PAYOUT_FAVORED_KEY:}
-    fee-percent: ${EFI_PAYOUT_FEE_PERCENT:1.59}
-    fee-fixed: ${EFI_PAYOUT_FEE_FIXED:0.49}
-    margin-percent: ${EFI_PAYOUT_MARGIN_PERCENT:0.8}
-    margin-fixed: ${EFI_PAYOUT_MARGIN_FIXED:0}
-    min-send: ${EFI_PAYOUT_MIN_SEND:1.20}
-    fees:
-      includeGatewayFees: true
-    delay:
-      cardDays: ${EFI_PAYOUT_DELAY_CARD_DAYS:32}
-      pixMinutes: ${EFI_PAYOUT_DELAY_PIX_MINUTES:0}
+    payout:
+      favored-key: ${EFI_PAYOUT_FAVORED_KEY:}
+      fee-percent: ${EFI_PAYOUT_FEE_PERCENT:1.59}
+      fee-fixed: ${EFI_PAYOUT_FEE_FIXED:0.49}
+      margin-percent: ${EFI_PAYOUT_MARGIN_PERCENT:0.8}
+      margin-fixed: ${EFI_PAYOUT_MARGIN_FIXED:0}
+      min-send: ${EFI_PAYOUT_MIN_SEND:1.20}
+      fees:
+        includeGatewayFees: true
+      delay:
+        cardDays: ${EFI_PAYOUT_DELAY_CARD_DAYS:32}
+        pixMinutes: ${EFI_PAYOUT_DELAY_PIX_MINUTES:0}
     behavior:
       onePayoutPerAuthorPerOrder: true
 
@@ -123,11 +123,11 @@ payout:   # espelho para consumidores legados
   fees:
     includeGatewayFees: true
   delay:
-    cardDays: ${EFI_PAYOUT_DELAY_CARD_DAYS:31}
+    cardDays: ${EFI_PAYOUT_DELAY_CARD_DAYS:32}
     pixMinutes: ${EFI_PAYOUT_DELAY_PIX_MINUTES:0}
   scheduler:
     card:
-      cron: ${PAYOUT_SCHED_CARD_CRON:0 17 3 * * *}
+      cron: "${PAYOUT_SCHED_CARD_CRON:0 17 3 * * *}"
       batchSize: ${PAYOUT_SCHED_CARD_BATCH:100}
 
 springdoc:

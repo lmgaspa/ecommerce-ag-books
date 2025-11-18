@@ -17,7 +17,7 @@ import java.time.OffsetDateTime
 class CardPayoutScheduler(
     private val jdbc: NamedParameterJdbcTemplate,
     private val payoutTrigger: PaymentTriggerService,
-    @Value("\${payout.delay.cardDays:31}") private val cardDays: Int,
+    @Value("\${payout.delay.cardDays:32}") private val cardDays: Int,
     @Value("\${payout.scheduler.card.batchSize:100}") private val batchSize: Int
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
