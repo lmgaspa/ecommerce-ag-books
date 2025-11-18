@@ -33,7 +33,7 @@ class CouponService(
     fun validateCoupon(request: CouponValidationRequest): CouponValidationResult {
         log.info("Validating coupon: code={}, orderTotal={}", request.code, request.orderTotal)
 
-        val coupon = couponRepository.findActiveByCode(request.code)
+        val coupon = couponRepository.findActiveByCodeIgnoreCase(request.code)
             .orElse(null) ?: return CouponValidationResult(
                 valid = false,
                 errorMessage = "Cupom não encontrado ou inativo"
@@ -111,7 +111,7 @@ class CouponService(
     }
 
     fun getCouponByCode(code: String): Coupon? {
-        return couponRepository.findActiveByCode(code).orElse(null)
+        return couponRepository.findActiveByCodeIgnoreCase(code).orElse(null)
     }
 
     fun createCoupon(

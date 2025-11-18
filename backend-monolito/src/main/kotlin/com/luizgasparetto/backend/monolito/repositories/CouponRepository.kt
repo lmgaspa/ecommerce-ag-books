@@ -19,6 +19,9 @@ interface CouponRepository : JpaRepository<Coupon, Long> {
     @Query("SELECT c FROM Coupon c WHERE c.code = :code AND c.active = true")
     fun findActiveByCode(@Param("code") code: String): Optional<Coupon>
     
+    @Query("SELECT c FROM Coupon c WHERE UPPER(c.code) = UPPER(:code) AND c.active = true")
+    fun findActiveByCodeIgnoreCase(@Param("code") code: String): Optional<Coupon>
+    
     @Query("""
         SELECT COUNT(oc) FROM OrderCoupon oc 
         WHERE oc.coupon.id = :couponId
