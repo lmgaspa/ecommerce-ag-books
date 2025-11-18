@@ -6,7 +6,7 @@ import { formatPrice } from "../utils/formatPrice";
 import { calcularFreteComBaseEmCarrinho } from "../utils/freteUtils";
 import { cookieStorage } from "../utils/cookieUtils";
 import type { CheckoutFormData } from "../types/CheckoutTypes";
-import { mapCartItems } from "../analytics";
+import { analytics, mapCartItems } from "../analytics"; // ⬅️ adicionamos analytics aqui
 import { useCoupon } from "../hooks/useCoupon";
 import { apiPost, buildApiUrl } from "../api/http";
 
@@ -239,6 +239,21 @@ export default function PixPaymentPage() {
           expMs = Date.now() + 15 * 60 * 1000;
         }
         setExpiresAtMs(expMs);
+
+        // GA4: preferência de pagamento (Pix)
+        // Aqui não alteramos o fluxo de negócio; apenas ESTENDEMOS com analytics (OCP).
+        try {
+          const itemsPayload = mapCartItems(cartItems);
+          const value = Number(totalComFrete);
+          analytics.addPaymentInfo({
+            items: itemsPayload,
+            value,
+            currency: "BRL",
+            payment_type: "pix", // usamos payment_type para distinguir Pix no funil
+          });
+        } catch {
+          // nunca deixamos a tela de pagamento quebrar por causa de tracking
+        }
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : String(e);
         console.error(msg);
@@ -258,7 +273,7 @@ export default function PixPaymentPage() {
       }
     };
     run();
-  }, [frete, cartItems, totalProdutos, desconto, totalComFrete, navigate, orderId]);
+  }, [frete, cartItems, totalProdutos, desconto, totalComFrete, navigate, orderId, couponCode]);
 
   // Contador regressivo
   useEffect(() => {

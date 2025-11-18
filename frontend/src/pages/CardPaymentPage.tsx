@@ -353,7 +353,7 @@ export default function CardPaymentPage() {
   const formatTimeLeft = (seconds: number): string => {
     const minutes = Math.floor(seconds / 60);
     const remainingSeconds = seconds % 60;
-    return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+    return `${minutes}:${remainingSeconds.toString().padStart(2, "0")}`;
   };
 
   const handlePay = async () => {
@@ -362,7 +362,7 @@ export default function CardPaymentPage() {
     setErrorMsg(null);
 
     try {
-      // GA4: add_payment_info (OCP)
+      // GA4: add_payment_info – mantemos o fluxo e só enriquecemos com payment_type (OCP)
       try {
         analytics.addPaymentInfo({
           items: mapCartItems(cart),
@@ -458,7 +458,9 @@ export default function CardPaymentPage() {
           <div className="flex items-center">
             <span className="text-lg mr-2">⚠️</span>
             <div>
-              <p className="font-medium">Cartão será invalidado em {timeLeft && formatTimeLeft(timeLeft)}!</p>
+              <p className="font-medium">
+                Cartão será invalidado em {timeLeft !== null ? formatTimeLeft(timeLeft) : "--:--"}!
+              </p>
               <p className="text-sm">Complete o pagamento agora</p>
             </div>
           </div>
@@ -483,7 +485,9 @@ export default function CardPaymentPage() {
             <span className="text-lg mr-2">❌</span>
             <div>
               <p className="font-medium">Cartão invalidado por questões de segurança</p>
-              <p className="text-sm">O cartão foi invalidado aos 60 segundos restantes. Reinicie o processo de pagamento</p>
+              <p className="text-sm">
+                O cartão foi invalidado aos 60 segundos restantes. Reinicie o processo de pagamento
+              </p>
             </div>
           </div>
         </div>
