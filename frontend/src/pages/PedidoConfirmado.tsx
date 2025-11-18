@@ -36,7 +36,21 @@ export default function PedidoConfirmado() {
       // Se veio orderId na URL, garanta que bate com o payload
       if (orderId && String(payload.transaction_id) !== String(orderId)) return;
 
-      analytics.purchase(payload);
+      // GA4: anexamos o tipo de pagamento ao purchase,
+      // para conseguir "Pagamentos Pix x Cartão" usando o evento purchase.
+      const paymentType =
+        payment === "pix"
+          ? "pix"
+          : payment === "card"
+          ? "credit_card"
+          : "unknown";
+
+      const enrichedPayload = {
+        ...payload,
+        payment_type: paymentType,
+      } as PurchasePayload;
+
+      analytics.purchase(enrichedPayload);
       sessionStorage.setItem(sentKey, "1");
       sessionStorage.removeItem("ga_purchase_payload");
     } catch {
