@@ -11,6 +11,18 @@ class BookService(
     private val bookRepository: BookRepository
 ) {
 
+    private fun Book.toDto(): BookDTO = BookDTO(
+        id = this.id,
+        title = this.title,
+        imageUrl = this.imageUrl,
+        price = this.price,
+        description = this.description ?: "",
+        author = this.author,
+        category = this.category,
+        stock = this.stock,
+        available = this.stock > 0
+    )
+
     fun getAllBooks(): List<BookDTO> =
         bookRepository.findAll().map { it.toDto() }
 
