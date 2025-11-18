@@ -38,6 +38,7 @@ export interface AnalyticsPort {
     currency?: string;
   }): void;
 
+  // 🔽 aqui entra a extensão para suportar método de pagamento e multi-autor
   purchase(params: {
     transaction_id: string;
     value: number;
@@ -45,6 +46,10 @@ export interface AnalyticsPort {
     shipping?: number;
     tax?: number;
     items: AnalyticsItem[];
+
+    // novos, opcionais → não quebram nada existente
+    payment_type?: string; // "pix" | "credit_card" | etc.
+    author_id?: number;    // pronto para multi-autor
   }): void;
 
   pageView?(params: {

@@ -23,7 +23,11 @@ export class GA4Analytics implements AnalyticsPort {
     gtag("event", event, params);
   }
 
-  addToCart(params: { items: AnalyticsItem[]; value: number; currency?: string; }): void {
+  addToCart(params: {
+    items: AnalyticsItem[];
+    value: number;
+    currency?: string;
+  }): void {
     this.send("add_to_cart", {
       currency: params.currency ?? this.currencyDefault,
       value: Number(params.value),
@@ -77,6 +81,7 @@ export class GA4Analytics implements AnalyticsPort {
     });
   }
 
+  // 🔽 aqui passamos a carregar também payment_type/author_id no purchase
   purchase(params: {
     transaction_id: string;
     value: number;
@@ -84,6 +89,8 @@ export class GA4Analytics implements AnalyticsPort {
     shipping?: number;
     tax?: number;
     items: AnalyticsItem[];
+    payment_type?: string;
+    author_id?: number;
   }): void {
     this.send("purchase", {
       transaction_id: params.transaction_id,
@@ -92,10 +99,16 @@ export class GA4Analytics implements AnalyticsPort {
       shipping: Number(params.shipping ?? 0),
       tax: Number(params.tax ?? 0),
       items: params.items,
+      payment_type: params.payment_type,
+      author_id: params.author_id,
     });
   }
 
-  pageView(params: { page_location: string; page_path: string; page_title?: string; }): void {
+  pageView(params: {
+    page_location: string;
+    page_path: string;
+    page_title?: string;
+  }): void {
     this.send("page_view", params);
   }
 }
