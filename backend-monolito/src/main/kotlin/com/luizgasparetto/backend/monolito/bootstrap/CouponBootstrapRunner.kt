@@ -46,11 +46,11 @@ class CouponBootstrapRunner(
 
         val existing = couponRepository.findByCodeIgnoreCase(code).orElse(null)
 
-        val validFrom = couponProperties.validFrom?.let {
+        val validFrom = couponProperties.validFrom?.takeIf { it.isNotBlank() }?.let {
             OffsetDateTime.parse(it, DateTimeFormatter.ISO_OFFSET_DATE_TIME)
         } ?: OffsetDateTime.now()
 
-        val validUntil = couponProperties.validUntil?.let {
+        val validUntil = couponProperties.validUntil?.takeIf { it.isNotBlank() }?.let {
             OffsetDateTime.parse(it, DateTimeFormatter.ISO_OFFSET_DATE_TIME)
         }
 
