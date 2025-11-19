@@ -2,7 +2,7 @@ export const descriptions = {
   extase: `
     A presente coletânea reúne crônicas de dois períodos.<br><br>
     As primeiras quatro, inéditas, são de outubro e novembro de 2022;<br>
-    as seguintes quatro do período entre 2000 e 2001; e a última, como publicar um livro?, do ano de 2018.<br><br>
+    as seguintes quatro do período entre 2000 e 2001; e a última, como publicar um livro? do ano de 2018.<br><br>
 
     As primeiras têm como ambiência Itabuna e o seu Rio Cachoeira.<br>
     As últimas, o Sudeste da Bahia, a região do cacau da Bahia e da sua exuberante Mata Atlântica.<br><br>
