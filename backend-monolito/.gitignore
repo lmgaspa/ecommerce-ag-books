@@ -1,4 +1,21 @@
 HELP.md
+
+# Documentation (ignora pasta docs/)
+docs/
+
+# Logs e arquivos temporários
+*.log
+logs/
+*.tmp
+*.temp
+*.bak
+*.backup
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
 .gradle
 build/
 !gradle/wrapper/gradle-wrapper.jar
