@@ -39,9 +39,10 @@ export const descriptions = {
     Filhos também surpreendem, mas os pais andam, quase sempre, muito ocupados em ganhar a vida para perceberem.<br>
     Os avós têm mais tempo e podem ver mais e ver melhor.<br><br>
 
-    As histórias de “Para sempre felizes!” contam episódios reais, vivenciados com meu neto.<br>
+    As histórias de “Para sempre felizes!” contam episódios reais, vivenciados
+    com meu neto.<br><br>
     São episódios que, com variantes, muitos avós vivenciaram e vivenciam.<br>
-    Os pais, em sua pressa, quase sempre passam batidos.<br>
+    Os pais, em sua pressa, quase sempre passam batidos.<br><br>
     E, quando notam, anos já se passaram e os filhos já cresceram.
   `,
   versos: `
