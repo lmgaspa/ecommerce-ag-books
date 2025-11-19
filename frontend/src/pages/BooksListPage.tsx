@@ -2,6 +2,7 @@ import { useMemo, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import type { Book } from "../data/books";
 import { books as localBooks } from "../data/books";
+import { descriptions } from "../data/descriptions";
 import { useCart } from "../hooks/useCart";
 import { useStockByIds } from "../hooks/useStockByIds";
 import { getAllBooks } from "../api/stock";
@@ -14,13 +15,31 @@ const BooksListPage = () => {
   const [books, setBooks] = useState<Book[]>(localBooks);
   const [loadingBooks, setLoadingBooks] = useState(true);
 
-  // Buscar livros da API ao carregar
+  // Buscar livros da API ao carregar e mesclar com descrições do frontend
   useEffect(() => {
     const fetchBooks = async () => {
       setLoadingBooks(true);
       const apiBooks = await getAllBooks();
       if (apiBooks && apiBooks.length > 0) {
-        setBooks(apiBooks);
+        // Mescla dados da API com descrições do frontend
+        const mergedBooks = apiBooks.map((apiBook) => {
+          // Busca descrição do frontend pelo ID
+          const localDescription = descriptions[apiBook.id as keyof typeof descriptions];
+          // Busca dados completos do livro local (para pegar relatedBooks, additionalInfo, etc)
+          const localBook = localBooks.find((b) => b.id === apiBook.id);
+          
+          return {
+            ...apiBook,
+            // Descrição sempre do frontend (descriptions.ts)
+            description: localDescription || apiBook.description || "",
+            // Metadados do frontend se existirem
+            relatedBooks: localBook?.relatedBooks || apiBook.relatedBooks || [],
+            additionalInfo: localBook?.additionalInfo || apiBook.additionalInfo || {},
+            author: localBook?.author || apiBook.author || "",
+            category: localBook?.category || apiBook.category || "",
+          };
+        });
+        setBooks(mergedBooks);
       } else {
         // Fallback para dados locais se API falhar
         setBooks(localBooks);
