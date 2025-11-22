@@ -9,8 +9,9 @@ import AuthorInfo from "./AuthorInfo";
 import ButtonCountCart from "../cart/ButtonCountCart";
 import { useCart } from "../../hooks/useCart";
 import BookPrice from "../common/BookPrice";
+import VerificationStock from "../common/VerificationStock";
 
-type BookDetailsProps = Book;
+type BookDetailsProps = Book & { loading?: boolean };
 
 const BookDetails = ({
   id,
@@ -23,6 +24,7 @@ const BookDetails = ({
   relatedBooks,
   category,
   stock,
+  loading = false,
 }: BookDetailsProps) => {
   const [quantity, setQuantity] = useState(1);
   const navigate = useNavigate();
@@ -67,34 +69,36 @@ const BookDetails = ({
         <div className="flex-1">
           <h1 className="text-4xl font-bold text-primary mb-4">{title}</h1>
 
-          <div className="flex items-center gap-3 mb-2">
-            <p className="text-3xl text-secondary font-semibold">
+          <div className="mb-4">
+            <p className="text-3xl text-secondary font-semibold mb-3">
               <BookPrice price={price} />
             </p>
+
             {!isAvailable ? (
-              <span className="px-3 py-1 text-sm bg-gray-300 text-gray-800 rounded">Esgotado</span>
+              <p className="mt-1 text-gray-600 font-semibold mb-4">Este livro foi esgotado, esperando nova edição a ser publicada.</p>
             ) : lowStock ? (
-              <p className="mt-1 text-red-600 font-bold">
-                ({stock}) EM ESTOQUE
-              </p>
+              <p className="mt-1 text-red-600 font-bold mb-4">({stock}) EM ESTOQUE</p>
             ) : null}
+
+            <div className="flex items-center gap-4">
+              <ButtonCountCart quantity={quantity} onDecrease={handleDecrease} onIncrease={handleIncrease} />
+              {loading ? (
+                <VerificationStock />
+              ) : isAvailable ? (
+                <button
+                  onClick={handleAddToCart}
+                  className="px-6 py-2 rounded-md shadow-md transition bg-green-600 text-white hover:bg-green-700"
+                >
+                  Adicionar ao Carrinho
+                </button>
+              ) : (
+                <span className="px-6 py-2 bg-gray-300 text-gray-800 rounded-md shadow-md">Esgotado</span>
+              )}
+            </div>
           </div>
 
           <BookDescription description={description} />
           <BookAuthor author={author} />
-
-          <div className="flex items-center gap-4 mb-8">
-            <ButtonCountCart quantity={quantity} onDecrease={handleDecrease} onIncrease={handleIncrease} />
-            <button
-              onClick={handleAddToCart}
-              disabled={!isAvailable}
-              className={`px-6 py-2 rounded-md shadow-md transition ${
-                isAvailable ? "bg-green-600 text-white hover:bg-green-700" : "bg-gray-300 text-gray-600 cursor-not-allowed"
-              }`}
-            >
-              {isAvailable ? "Adicionar ao Carrinho" : "Esgotado"}
-            </button>
-          </div>
         </div>
       </div>
 

@@ -1,10 +1,13 @@
 import type { CartItem } from '../context/CartTypes';
-import { calcularPesoConsiderado } from './pesoLivros';
+// import { calcularPesoConsiderado } from './pesoLivros';
+
+// Frete fixo de R$ 22,00 - independente de quantidade de livros ou distância
 
 /**
- * Calcula o frete via regra simulada dos Correios
+ * Comentado: Cálculo original de frete via regra simulada dos Correios
  * com base na distância (CEP) e no peso dos livros.
  */
+/*
 export async function calcularFreteViaCorreios(
   cepDestino: string,
   cartItems: { id: string; quantity: number }[]
@@ -29,19 +32,26 @@ export async function calcularFreteViaCorreios(
     return 0;
   }
 }
+*/
 
 /**
  * Wrapper que valida CPF/CEP e calcula o frete.
+ * Agora retorna sempre R$ 22,00 fixo.
  */
 export async function calcularFreteComBaseEmCarrinho(
   form: { cep: string; cpf: string },
   cartItems: CartItem[]
 ): Promise<number> {
+  // Validações básicas
   const cep = form.cep.replace(/\D/g, '');
   const cpfNumeros = form.cpf.replace(/\D/g, '');
 
   if (cpfNumeros === '00000000000') return 0;
   if (cep.length !== 8 || cartItems.length === 0) return 0;
 
-  return await calcularFreteViaCorreios(cep, cartItems);
+  // Frete fixo de R$ 22,00
+  return 22;
+  
+  // Comentado: Cálculo original
+  // return await calcularFreteViaCorreios(cep, cartItems);
 }

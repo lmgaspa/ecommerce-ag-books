@@ -8,7 +8,7 @@ export default function BookPage() {
   const { id } = useParams<{ id: string }>();
   const book = useMemo(() => books.find((b) => b.id === id), [id]);
   const idArr = useMemo(() => (id ? [id] : []), [id]);
-  const { data: stockMap } = useStockByIds(idArr);
+  const { data: stockMap, loading } = useStockByIds(idArr);
 
   if (!book) return <p>Livro não encontrado</p>;
 
@@ -17,5 +17,5 @@ export default function BookPage() {
       ? stockMap[book.id]!.stock
       : book.stock ?? 0;
 
-  return <BookDetails {...book} stock={realStock} />;
+  return <BookDetails {...book} stock={realStock} loading={loading} />;
 }
