@@ -17,9 +17,13 @@ export default function PedidoConfirmado() {
   const payment = useMemo(() => paymentRaw.trim().toLowerCase(), [paymentRaw]);
 
   const paidParam = useMemo(() => params.get("paid"), [params]);
-  const paid = useMemo(() => (paidParam ?? "").trim().toLowerCase() === "true", [paidParam]);
+  const paid = useMemo(
+    () => (paidParam ?? "").trim().toLowerCase() === "true",
+    [paidParam]
+  );
 
-  // Dedupe e envio final de purchase (caso ainda não tenha sido enviado)
+  // Dedupe e envio final de purchase:
+  // Regra de negócio assumida: se chegou nesta página, o pedido já foi pago/aprovado
   useEffect(() => {
     const sentKey = `ga_purchase_sent_${orderId || "unknown"}`;
     if (sessionStorage.getItem(sentKey)) return;
@@ -30,11 +34,10 @@ export default function PedidoConfirmado() {
     try {
       const payload = JSON.parse(raw) as PurchasePayload;
 
-      // Para cartão, só envia se estiver pago
-      if (payment === "card" && !paid) return;
-
-      // Se veio orderId na URL, garanta que bate com o payload
-      if (orderId && String(payload.transaction_id) !== String(orderId)) return;
+      // Se veio orderId na URL, garantimos que bate com o payload
+      if (orderId && String(payload.transaction_id) !== String(orderId)) {
+        return;
+      }
 
       // GA4: anexamos o tipo de pagamento ao purchase,
       // para conseguir "Pagamentos Pix x Cartão" usando o evento purchase.
@@ -54,14 +57,14 @@ export default function PedidoConfirmado() {
       sessionStorage.setItem(sentKey, "1");
       sessionStorage.removeItem("ga_purchase_payload");
     } catch {
-      // no-op
+      // no-op: se algo der errado no parse, não quebramos a tela de confirmação
     }
   }, [orderId, payment, paid]);
 
   // Regras de exibição:
-  // - PIX => sempre "Pagamento confirmado"
-  // - Cartão pago => "Pagamento aprovado"
-  // - Cartão não pago => "Aguardando aprovação"
+  // - PIX => "Pagamento confirmado via Pix 🎉"
+  // - Cartão pago => "Pagamento aprovado via Cartão de Crédito 🎉"
+  // - Cartão não pago (caso algum dia essa página seja usada antes da aprovação) => "Aguardando aprovação"
   // - Caso sem parâmetro válido => "Pedido registrado"
   const isPix = payment === "pix";
   const isCard = payment === "card";
@@ -71,7 +74,9 @@ export default function PedidoConfirmado() {
     if (isPix) {
       return (
         <>
-          <h1 className="text-2xl font-semibold mb-2">Pagamento confirmado 🎉</h1>
+          <h1 className="text-2xl font-semibold mb-2">
+            Pagamento confirmado via Pix 🎉
+          </h1>
           {name && (
             <p className="text-gray-700 mb-1">
               Obrigado, <strong>{name}</strong>!
@@ -89,33 +94,49 @@ export default function PedidoConfirmado() {
       if (isPaid) {
         return (
           <>
-            <h1 className="text-2xl font-semibold mb-2">Pagamento aprovado 🎉</h1>
+            <h1 className="text-2xl font-semibold mb-2">
+              Pagamento aprovado via Cartão de Crédito 🎉
+            </h1>
             {orderId && <p className="text-gray-700">Pedido #{orderId}</p>}
             <p className="text-gray-600 mt-2">
-              Seu pagamento com cartão foi aprovado. Em breve você receberá um e-mail com os detalhes.
+              Seu pagamento com cartão foi aprovado. Em breve você receberá um
+              e-mail com os detalhes.
             </p>
           </>
         );
       }
+
+      // Fallback "aguardando aprovação" mantido por segurança/OCP,
+      // embora na regra atual essa página só deva ser acessada após aprovação.
       return (
         <>
-          <h1 className="text-2xl font-semibold mb-2">Aguardando aprovação do cartão ⏳</h1>
+          <h1 className="text-2xl font-semibold mb-2">
+            Aguardando aprovação do cartão ⏳
+          </h1>
           {orderId && <p className="text-gray-700">Pedido #{orderId}</p>}
           <p className="text-gray-600 mt-2">
-            Estamos processando o pagamento com cartão. Você receberá um e-mail assim que houver atualização.
+            Estamos processando o pagamento com cartão. Você receberá um e-mail
+            assim que houver atualização.
           </p>
         </>
       );
     }
 
     // Fallback quando não veio payment ou veio inválido
-    return <h1 className="text-2xl font-semibold mb-2">Pedido registrado ✅</h1>;
+    return (
+      <h1 className="text-2xl font-semibold mb-2">
+        Pedido registrado ✅
+      </h1>
+    );
   };
 
   return (
     <div className="max-w-2xl mx-auto p-6 text-center">
       {renderMessage()}
-      <Link to="/" className="inline-block mt-6 bg-black text-white px-4 py-2 rounded">
+      <Link
+        to="/"
+        className="inline-block mt-6 bg-black text-white px-4 py-2 rounded"
+      >
         Voltar para a loja
       </Link>
     </div>
