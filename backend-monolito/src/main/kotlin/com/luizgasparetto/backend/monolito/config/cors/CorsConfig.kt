@@ -15,7 +15,9 @@ class CorsConfig {
                 .allowedOriginPatterns(
                     "https://www.agenorgasparetto.com.br",
                     "https://agenorgasparetto.com.br",
-                    "http://localhost:5173"
+                    "http://localhost:5173",
+                    "http://localhost:5174",
+                    "http://localhost:5175"
                 )
                 .allowedMethods("GET")
                 .allowedHeaders("Accept", "Cache-Control", "Content-Type", "Last-Event-ID")
@@ -43,7 +45,9 @@ class CorsConfig {
                 .allowedOriginPatterns(
                     "https://www.agenorgasparetto.com.br",
                     "https://agenorgasparetto.com.br",
-                    "http://localhost:5173"
+                    "http://localhost:5173",
+                    "http://localhost:5174",
+                    "http://localhost:5175"
                 )
                 .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
                 .allowedHeaders("Accept", "Content-Type", "Authorization")
