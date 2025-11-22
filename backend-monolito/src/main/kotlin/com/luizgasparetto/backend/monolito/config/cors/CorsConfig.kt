@@ -28,7 +28,9 @@ class CorsConfig {
                 .allowedOriginPatterns(
                     "https://www.agenorgasparetto.com.br",
                     "https://agenorgasparetto.com.br",
-                    "http://localhost:5173"
+                    "http://localhost:5173",
+                    "http://localhost:5174",
+                    "http://localhost:5175"
                 )
                 .allowedMethods("GET", "POST", "OPTIONS")
                 .allowedHeaders("Content-Type")
