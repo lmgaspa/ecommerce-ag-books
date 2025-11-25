@@ -1,10 +1,6 @@
 // src/pages/PedidoConfirmado.tsx
-import { useEffect, useMemo } from "react";
+import { useMemo } from "react";
 import { useSearchParams, Link } from "react-router-dom";
-import { analytics } from "../analytics";
-import type { AnalyticsPort } from "../analytics/AnalyticsPort";
-
-type PurchasePayload = Parameters<AnalyticsPort["purchase"]>[0];
 
 export default function PedidoConfirmado() {
   const [params] = useSearchParams();
@@ -21,45 +17,6 @@ export default function PedidoConfirmado() {
     () => (paidParam ?? "").trim().toLowerCase() === "true",
     [paidParam]
   );
-
-  // Dedupe e envio final de purchase:
-  // Regra de negócio assumida: se chegou nesta página, o pedido já foi pago/aprovado
-  useEffect(() => {
-    const sentKey = `ga_purchase_sent_${orderId || "unknown"}`;
-    if (sessionStorage.getItem(sentKey)) return;
-
-    const raw = sessionStorage.getItem("ga_purchase_payload");
-    if (!raw) return;
-
-    try {
-      const payload = JSON.parse(raw) as PurchasePayload;
-
-      // Se veio orderId na URL, garantimos que bate com o payload
-      if (orderId && String(payload.transaction_id) !== String(orderId)) {
-        return;
-      }
-
-      // GA4: anexamos o tipo de pagamento ao purchase,
-      // para conseguir "Pagamentos Pix x Cartão" usando o evento purchase.
-      const paymentType =
-        payment === "pix"
-          ? "pix"
-          : payment === "card"
-          ? "credit_card"
-          : "unknown";
-
-      const enrichedPayload = {
-        ...payload,
-        payment_type: paymentType,
-      } as PurchasePayload;
-
-      analytics.purchase(enrichedPayload);
-      sessionStorage.setItem(sentKey, "1");
-      sessionStorage.removeItem("ga_purchase_payload");
-    } catch {
-      // no-op: se algo der errado no parse, não quebramos a tela de confirmação
-    }
-  }, [orderId, payment, paid]);
 
   // Regras de exibição:
   // - PIX => "Pagamento confirmado via Pix 🎉"
