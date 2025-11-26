@@ -4,9 +4,13 @@ import { useSearchParams, Link } from "react-router-dom";
 import { CartContext } from "../context/CartContext";
 import { analytics } from "../analytics";
 import type { AnalyticsPort } from "../analytics/AnalyticsPort";
+import Cookies from "js-cookie";
 
 // Usa a própria porta como fonte da verdade do tipo (OCP friendly)
 type PurchaseParams = Parameters<AnalyticsPort["purchase"]>[0];
+
+const CART_COOKIE_NAME = "cart";
+const GA_KEY = "ga_purchase_payload";
 
 export default function PedidoConfirmado() {
   const [params] = useSearchParams();
@@ -30,11 +34,18 @@ export default function PedidoConfirmado() {
 
   const cartContext = useContext(CartContext);
 
-  // ✅ Limpa o carrinho quando a página representa um pagamento concluído
+  // ✅ Limpa o carrinho (contexto + cookie) quando a página representa um pagamento concluído
   useEffect(() => {
-    if (!cartContext) return;
-    if (isPaid) {
+    if (!isPaid) return;
+
+    if (cartContext) {
       cartContext.clearCart();
+    }
+
+    try {
+      Cookies.remove(CART_COOKIE_NAME);
+    } catch {
+      // melhor esforço, falha silenciosa
     }
   }, [isPaid, cartContext]);
 
@@ -46,22 +57,20 @@ export default function PedidoConfirmado() {
     if (!isPaid) return;
     if (typeof window === "undefined") return;
 
-    const KEY = "ga_purchase_payload";
-
     try {
-      const raw = sessionStorage.getItem(KEY);
+      const raw = sessionStorage.getItem(GA_KEY);
       if (!raw) return;
 
       let parsed: any;
       try {
         parsed = JSON.parse(raw);
       } catch {
-        sessionStorage.removeItem(KEY);
+        sessionStorage.removeItem(GA_KEY);
         return;
       }
 
       if (!parsed || typeof parsed !== "object") {
-        sessionStorage.removeItem(KEY);
+        sessionStorage.removeItem(GA_KEY);
         return;
       }
 
@@ -93,7 +102,6 @@ export default function PedidoConfirmado() {
         shipping: shippingNumber,
         tax: taxNumber,
         items,
-        // Campos opcionais: se você começar a salvar no sessionStorage, eles entram lisos
         payment_type:
           typeof parsed.payment_type === "string"
             ? parsed.payment_type
@@ -106,7 +114,7 @@ export default function PedidoConfirmado() {
 
       // Validação mínima antes de enviar
       if (!payload.transaction_id || !Number.isFinite(payload.value)) {
-        sessionStorage.removeItem(KEY);
+        sessionStorage.removeItem(GA_KEY);
         return;
       }
 
@@ -116,7 +124,7 @@ export default function PedidoConfirmado() {
       // falha silenciosa
     } finally {
       try {
-        sessionStorage.removeItem(KEY);
+        sessionStorage.removeItem(GA_KEY);
       } catch {
         // ignore
       }

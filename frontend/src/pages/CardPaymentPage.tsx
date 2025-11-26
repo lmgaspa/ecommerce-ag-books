@@ -56,8 +56,6 @@ const EFI_ENV: "production" | "sandbox" =
     ? "sandbox"
     : "production";
 
-// API_BASE não é mais necessário - usando apiPost do http.ts que já gerencia /api/v1
-
 /* ---------- Formatting helpers ---------- */
 function formatCardNumber(value: string, brand: BrandUI): string {
   const digits = value.replace(/\D/g, "");
@@ -432,6 +430,8 @@ export default function CardPaymentPage() {
           shipping: Number(shipping || 0),
           tax: 0,
           items: mapCartItems(cart),
+          // sobe até PedidoConfirmado → analytics.purchase
+          payment_type: "credit_card",
         };
         sessionStorage.setItem(
           "ga_purchase_payload",

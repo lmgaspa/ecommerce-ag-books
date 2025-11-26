@@ -255,7 +255,6 @@ export default function PixPaymentPage() {
         setExpiresAtMs(expMs);
 
         // GA4: preferência de pagamento (Pix)
-        // Aqui não alteramos o fluxo de negócio; apenas ESTENDEMOS com analytics (OCP).
         try {
           const itemsPayload = mapCartItems(cartItems);
           const value = Number(totalComFrete);
@@ -263,16 +262,15 @@ export default function PixPaymentPage() {
             items: itemsPayload,
             value,
             currency: "BRL",
-            payment_type: "pix", // usamos payment_type para distinguir Pix no funil
+            payment_type: "pix",
           });
         } catch {
-          // nunca deixamos a tela de pagamento quebrar por causa de tracking
+          // tracking nunca quebra tela
         }
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : String(e);
         console.error(msg);
 
-        // Tratar erros específicos 409/422
         if (msg.includes("409") || msg.includes("422")) {
           setErrorMsg(
             "Indisponível no momento. Outro cliente reservou este item."
@@ -360,6 +358,8 @@ export default function PixPaymentPage() {
             tax: 0,
             discount: desconto,
             items: itemsPayload,
+            // 🔎 isso sobe até PedidoConfirmado → analytics.purchase
+            payment_type: "pix",
           };
           sessionStorage.setItem(
             "ga_purchase_payload",
