@@ -6,44 +6,6 @@ import { apiGet, apiPost } from "../api/http";
 export default function CookieConsent() {
   const [visible, setVisible] = useState(false);
 
-  // Verificar consentimento no backend ao carregar
-  useEffect(() => {
-    const checkConsent = async () => {
-      try {
-        // Tenta buscar consentimento do backend
-        const response = await apiGet<{ consented: boolean }>("/privacy/consent");
-        if (response.consented) {
-          // Se já tem consentimento no backend, sincroniza localmente
-          const isLocalhost =
-            window.location.hostname === "localhost" ||
-            window.location.hostname === "127.0.0.1";
-          const extra = isLocalhost ? "SameSite=Lax;" : "Secure; SameSite=None;";
-          document.cookie = `cookie_consent=true; max-age=31536000; path=/; ${extra}`;
-          setVisible(false);
-          return;
-        }
-      } catch {
-        // Se API falhar, usa apenas cookie local como fallback
-      }
-      
-      // Fallback: verifica cookie local
-      const consent = document.cookie.includes("cookie_consent=true");
-      if (!consent) setVisible(true);
-    };
-
-    checkConsent();
-  }, []);
-
-  const setCookie = (value: "true" | "false") => {
-    const isLocalhost =
-      window.location.hostname === "localhost" ||
-      window.location.hostname === "127.0.0.1";
-    // Em localhost: SameSite=Lax (sem Secure)
-    // Em domínio/https: SameSite=None; Secure
-    const extra = isLocalhost ? "SameSite=Lax;" : "Secure; SameSite=None;";
-    document.cookie = `cookie_consent=${value}; max-age=31536000; path=/; ${extra}`;
-  };
-
   const notifyGate = (value: "true" | "false") => {
     try {
       localStorage.setItem("analyticsConsent", value === "true" ? "true" : "false");
@@ -52,20 +14,56 @@ export default function CookieConsent() {
         console.warn("CookieConsent: não foi possível usar localStorage.", err);
       }
     }
-    // Sinaliza o AnalyticsGate para reagir imediatamente
     window.dispatchEvent(new Event("cookie-consent-changed"));
   };
+
+  const setCookie = (value: "true" | "false") => {
+    const isLocalhost =
+      window.location.hostname === "localhost" ||
+      window.location.hostname === "127.0.0.1";
+    const extra = isLocalhost ? "SameSite=Lax;" : "Secure; SameSite=None;";
+    document.cookie = `cookie_consent=${value}; max-age=31536000; path=/; ${extra}`;
+  };
+
+  // Verificar consentimento no backend ao carregar
+  useEffect(() => {
+    const checkConsent = async () => {
+      try {
+        const response = await apiGet<{ consented: boolean }>("/privacy/consent");
+        if (response.consented) {
+          const isLocalhost =
+            window.location.hostname === "localhost" ||
+            window.location.hostname === "127.0.0.1";
+          const extra = isLocalhost ? "SameSite=Lax;" : "Secure; SameSite=None;";
+          document.cookie = `cookie_consent=true; max-age=31536000; path=/; ${extra}`;
+
+          // 🔑 Também sincroniza localStorage + dispara evento,
+          // para o AnalyticsGate carregar GA4 mesmo no “primeiro load”.
+          notifyGate("true");
+
+          setVisible(false);
+          return;
+        }
+      } catch {
+        // Se API falhar, usa apenas cookie local como fallback
+      }
+
+      const consent = document.cookie.includes("cookie_consent=true");
+      if (!consent) setVisible(true);
+    };
+
+    checkConsent();
+  }, []);
 
   const acceptCookies = async () => {
     setCookie("true");
     notifyGate("true");
     setVisible(false);
-    
-    // Notifica backend sobre consentimento
+
     try {
       await apiPost("/privacy/consent", { consented: true });
     } catch {
-      // Silencioso - não bloqueia a UX se API falhar
+      // Silencioso
     }
   };
 
@@ -73,12 +71,11 @@ export default function CookieConsent() {
     setCookie("false");
     notifyGate("false");
     setVisible(false);
-    
-    // Notifica backend sobre recusa
+
     try {
       await apiPost("/privacy/consent", { consented: false });
     } catch {
-      // Silencioso - não bloqueia a UX se API falhar
+      // Silencioso
     }
   };
 
@@ -97,7 +94,11 @@ export default function CookieConsent() {
     >
       <p className="text-sm leading-relaxed sm:max-w-[70%]">
         Usamos cookies para melhorar sua experiência e analisar as métricas do site.
-        Você pode aceitar ou recusar conforme a <span className="font-semibold">LGPD - Lei Geral de Proteção de Dados Pessoais</span>.
+        Você pode aceitar ou recusar conforme a{" "}
+        <span className="font-semibold">
+          LGPD - Lei Geral de Proteção de Dados Pessoais
+        </span>
+        .
       </p>
 
       <div className="flex gap-3 sm:shrink-0">

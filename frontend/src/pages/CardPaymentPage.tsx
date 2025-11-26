@@ -1,5 +1,5 @@
 // src/pages/CardPaymentPage.tsx
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useContext } from "react";
 import { useNavigate } from "react-router-dom";
 
 // ---- Efí (via NPM package) ----
@@ -11,38 +11,18 @@ import {
   type CardBrand,
   type InstallmentItem,
 } from "../services/efiCard";
+
 import { cookieStorage } from "../utils/cookieUtils";
 import { analytics, mapCartItems } from "../analytics";
 import { useCoupon } from "../hooks/useCoupon";
 import { apiPost } from "../api/http";
 
+import type { CartItem } from "../context/CartTypes";
+import type { CheckoutFormData } from "../types/CheckoutTypes";
+import { CartContext } from "../context/CartContext";
+import { OrderSummary } from "../components/OrderSummary";
+
 /* ===================== Local types & helpers ===================== */
-
-interface CartItem {
-  id: string;
-  title: string;
-  price: number;
-  quantity: number;
-  imageUrl: string;
-}
-
-interface CheckoutFormData {
-  firstName: string;
-  lastName: string;
-  cpf: string;
-  country: string;
-  cep: string;
-  address: string;
-  number: string;
-  complement?: string;
-  district: string;
-  city: string;
-  state: string;
-  phone: string;
-  email: string;
-  note?: string;
-  shipping?: number;
-}
 
 interface CardCheckoutResponse {
   success: boolean;
@@ -91,6 +71,7 @@ function formatCardNumber(value: string, brand: BrandUI): string {
   }
   return digits.slice(0, 16).replace(/(\d{4})(?=\d)/g, "$1 ").trim();
 }
+
 function formatMonthStrict(value: string): string {
   let d = value.replace(/\D/g, "").slice(0, 2);
   if (d.length === 1) {
@@ -102,13 +83,16 @@ function formatMonthStrict(value: string): string {
   }
   return d;
 }
+
 function formatYearYYYY(value: string): string {
   return value.replace(/\D/g, "").slice(0, 4);
 }
+
 function formatCvv(value: string, brand: BrandUI): string {
   const max = brand === "amex" ? 4 : 3;
   return value.replace(/\D/g, "").slice(0, max);
 }
+
 function isValidLuhn(numDigits: string): boolean {
   let sum = 0,
     dbl = false;
@@ -123,9 +107,11 @@ function isValidLuhn(numDigits: string): boolean {
   }
   return sum % 10 === 0;
 }
+
 function readJson<T>(key: string, fallback: T): T {
   return cookieStorage.get<T>(key, fallback);
 }
+
 const toYYYY = (yyOrYYYY: string) => {
   const d = yyOrYYYY.replace(/\D/g, "");
   return d.length === 2 ? `20${d}` : d.slice(0, 4);
@@ -145,8 +131,14 @@ interface CardData {
 export default function CardPaymentPage() {
   const navigate = useNavigate();
   const { getDiscountAmount, couponCode } = useCoupon();
+  const cartContext = useContext(CartContext);
 
-  const cart: CartItem[] = useMemo(() => readJson<CartItem[]>("cart", []), []);
+  // 1ª fonte: CartContext; fallback: cookie
+  const cart: CartItem[] = useMemo(
+    () => cartContext?.cartItems ?? readJson<CartItem[]>("cart", []),
+    [cartContext?.cartItems]
+  );
+
   const form: CheckoutFormData = useMemo(
     () => readJson<CheckoutFormData>("checkoutForm", {} as CheckoutFormData),
     []
@@ -178,7 +170,7 @@ export default function CardPaymentPage() {
   const [installmentOptions, setInstallmentOptions] = useState<InstallmentItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  
+
   // Estados para controle de expiração
   const [checkoutResponse, setCheckoutResponse] = useState<CardCheckoutResponse | null>(null);
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
@@ -200,7 +192,7 @@ export default function CardPaymentPage() {
     setTimeLeft(ttlSeconds);
 
     const interval = setInterval(() => {
-      setTimeLeft(prev => {
+      setTimeLeft((prev) => {
         if (prev === null) return null;
         const newTime = prev - 1;
 
@@ -266,7 +258,12 @@ export default function CardPaymentPage() {
           setInstallments(1);
           return;
         }
-        const resp = await getInstallments(PAYEE_CODE_ASSERTED, EFI_ENV, brand as CardBrand, cents);
+        const resp = await getInstallments(
+          PAYEE_CODE_ASSERTED,
+          EFI_ENV,
+          brand as CardBrand,
+          cents
+        );
         setInstallmentOptions(resp.installments || []);
         if (resp.installments?.length) {
           setInstallments(resp.installments[0].installment);
@@ -291,22 +288,28 @@ export default function CardPaymentPage() {
       cvv: formatCvv(prev.cvv, newBrand),
     }));
   };
+
   const onChangeNumber = (e: React.ChangeEvent<HTMLInputElement>) => {
     const b = brand;
     setCard((prev) => ({ ...prev, number: formatCardNumber(e.target.value, b) }));
   };
+
   const onChangeHolder = (e: React.ChangeEvent<HTMLInputElement>) => {
     setCard((prev) => ({ ...prev, holderName: e.target.value }));
   };
+
   const onChangeMonth = (e: React.ChangeEvent<HTMLInputElement>) => {
     setCard((prev) => ({ ...prev, expirationMonth: formatMonthStrict(e.target.value) }));
   };
+
   const onChangeYear = (e: React.ChangeEvent<HTMLInputElement>) => {
     setCard((prev) => ({ ...prev, expirationYear: formatYearYYYY(e.target.value) }));
   };
+
   const onBlurYear = () => {
     setCard((prev) => ({ ...prev, expirationYear: toYYYY(prev.expirationYear) }));
   };
+
   const onChangeCvv = (e: React.ChangeEvent<HTMLInputElement>) => {
     const b = brand;
     setCard((prev) => ({ ...prev, cvv: formatCvv(e.target.value, b) }));
@@ -331,19 +334,20 @@ export default function CardPaymentPage() {
 
   // Validação considerando expiração
   const canPay =
-    !loading && 
-    luhnOk && 
-    holderOk && 
-    monthOk && 
-    yearOk && 
-    cvvOk && 
-    docOk && 
-    total > 0 && 
+    !loading &&
+    luhnOk &&
+    holderOk &&
+    monthOk &&
+    yearOk &&
+    cvvOk &&
+    docOk &&
+    total > 0 &&
     !isExpired;
 
   const selectedInstallment = installmentOptions.find(
     (opt) => opt.installment === installments
   );
+
   const perInstallment = useMemo(() => {
     if (selectedInstallment) return selectedInstallment.value / 100;
     if (installments <= 1) return total;
@@ -405,8 +409,14 @@ export default function CardPaymentPage() {
       );
       setCheckoutResponse(data);
 
-      // Clear cart on success path
-      cookieStorage.remove("cart");
+      // 🔑 Limpeza do carrinho:
+      // - Preferimos CartContext (clearCart), se existir
+      // - Mantemos fallback para cookie (não quebra legado)
+      if (cartContext?.clearCart) {
+        cartContext.clearCart();
+      } else {
+        cookieStorage.remove("cart");
+      }
 
       const paidStatuses = ["PAID", "APPROVED", "CAPTURED", "CONFIRMED"];
       const isPaid = data.status
@@ -423,11 +433,16 @@ export default function CardPaymentPage() {
           tax: 0,
           items: mapCartItems(cart),
         };
-        sessionStorage.setItem("ga_purchase_payload", JSON.stringify(purchasePayload));
+        sessionStorage.setItem(
+          "ga_purchase_payload",
+          JSON.stringify(purchasePayload)
+        );
       }
 
       navigate(
-        `/pedido-confirmado?orderId=${data.orderId}&payment=card&paid=${isPaid ? "true" : "false"}`
+        `/pedido-confirmado?orderId=${data.orderId}&payment=card&paid=${
+          isPaid ? "true" : "false"
+        }`
       );
     } catch (e) {
       setErrorMsg(e instanceof Error ? e.message : "Falha no pagamento.");
@@ -439,7 +454,9 @@ export default function CardPaymentPage() {
 
   return (
     <div className="max-w-md mx-auto p-6">
-      <h2 className="text-xl font-semibold mb-4 text-center">Pagamento com Cartão</h2>
+      <h2 className="text-xl font-semibold mb-4 text-center">
+        Pagamento com Cartão
+      </h2>
 
       {checkoutResponse && !isExpired && (
         <div className="bg-blue-50 text-blue-700 p-3 mb-4 rounded-lg border border-blue-200">
@@ -447,7 +464,9 @@ export default function CardPaymentPage() {
             <span className="text-lg mr-2">⏰</span>
             <div>
               <p className="font-medium">Pagamento expira em 15 minutos</p>
-              <p className="text-sm">Complete o pagamento antes do tempo expirar</p>
+              <p className="text-sm">
+                Complete o pagamento antes do tempo expirar
+              </p>
             </div>
           </div>
         </div>
@@ -459,7 +478,8 @@ export default function CardPaymentPage() {
             <span className="text-lg mr-2">⚠️</span>
             <div>
               <p className="font-medium">
-                Cartão será invalidado em {timeLeft !== null ? formatTimeLeft(timeLeft) : "--:--"}!
+                Cartão será invalidado em{" "}
+                {timeLeft !== null ? formatTimeLeft(timeLeft) : "--:--"}!
               </p>
               <p className="text-sm">Complete o pagamento agora</p>
             </div>
@@ -472,8 +492,12 @@ export default function CardPaymentPage() {
           <div className="flex items-center">
             <span className="text-lg mr-2">🚨</span>
             <div>
-              <p className="font-medium">Por questões de segurança, o cartão foi invalidado!</p>
-              <p className="text-sm">Complete o pagamento agora ou será necessário reiniciar</p>
+              <p className="font-medium">
+                Por questões de segurança, o cartão foi invalidado!
+              </p>
+              <p className="text-sm">
+                Complete o pagamento agora ou será necessário reiniciar
+              </p>
             </div>
           </div>
         </div>
@@ -484,42 +508,32 @@ export default function CardPaymentPage() {
           <div className="flex items-center">
             <span className="text-lg mr-2">❌</span>
             <div>
-              <p className="font-medium">Cartão invalidado por questões de segurança</p>
+              <p className="font-medium">
+                Cartão invalidado por questões de segurança
+              </p>
               <p className="text-sm">
-                O cartão foi invalidado aos 60 segundos restantes. Reinicie o processo de pagamento
+                O cartão foi invalidado aos 60 segundos restantes. Reinicie o
+                processo de pagamento
               </p>
             </div>
           </div>
         </div>
       )}
 
-      {/* Resumo do Pedido */}
-      <div className="bg-gray-50 p-4 mb-6 rounded-lg">
-        <h3 className="text-lg font-semibold mb-3">Resumo do Pedido</h3>
-        <div className="space-y-2">
-          <div className="flex justify-between">
-            <span>Subtotal:</span>
-            <span>R$ {subtotal.toFixed(2).replace(".", ",")}</span>
-          </div>
-          <div className="flex justify-between">
-            <span>Frete:</span>
-            <span>R$ {shipping.toFixed(2).replace(".", ",")}</span>
-          </div>
-          {desconto > 0 && (
-            <div className="flex justify-between text-green-600">
-              <span>Desconto:</span>
-              <span>-R$ {desconto.toFixed(2).replace(".", ",")}</span>
-            </div>
-          )}
-          <div className="flex justify-between font-bold text-lg border-t pt-2">
-            <span>Total:</span>
-            <span>R$ {total.toFixed(2).replace(".", ",")}</span>
-          </div>
-        </div>
-      </div>
+      {/* 🔁 Usa o componente compartilhado de resumo */}
+      <OrderSummary
+        subtotal={subtotal}
+        shipping={shipping}
+        discount={desconto}
+        total={total}
+      />
 
       <label className="block text-sm font-medium mb-1">Bandeira</label>
-      <select value={brand} onChange={onChangeBrand} className="border p-2 w-full mb-4 rounded">
+      <select
+        value={brand}
+        onChange={onChangeBrand}
+        className="border p-2 w-full mb-4 rounded"
+      >
         <option value="visa">Visa</option>
         <option value="mastercard">Mastercard</option>
         <option value="amex">American Express</option>
@@ -597,7 +611,8 @@ export default function CardPaymentPage() {
             ))}
       </select>
       <p className="text-sm text-gray-600 mb-4">
-        {installments}x de R$ {perInstallment.toFixed(2)} (total R$ {total.toFixed(2)})
+        {installments}x de R$ {perInstallment.toFixed(2)} (total R${" "}
+        {total.toFixed(2)})
       </p>
 
       {!docOk && (
@@ -606,7 +621,11 @@ export default function CardPaymentPage() {
         </div>
       )}
 
-      {errorMsg && <div className="bg-red-50 text-red-600 p-2 mb-4 rounded">{errorMsg}</div>}
+      {errorMsg && (
+        <div className="bg-red-50 text-red-600 p-2 mb-4 rounded">
+          {errorMsg}
+        </div>
+      )}
 
       <button
         disabled={!canPay}
@@ -615,7 +634,11 @@ export default function CardPaymentPage() {
           canPay ? "hover:bg-blue-500" : "opacity-50 cursor-not-allowed"
         }`}
       >
-        {loading ? "Processando..." : isExpired ? "Pagamento Expirado" : "Pagar com Cartão"}
+        {loading
+          ? "Processando..."
+          : isExpired
+          ? "Pagamento Expirado"
+          : "Pagar com Cartão"}
       </button>
     </div>
   );

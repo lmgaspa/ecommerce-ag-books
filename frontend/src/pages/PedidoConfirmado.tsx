@@ -1,6 +1,7 @@
 // src/pages/PedidoConfirmado.tsx
-import { useMemo } from "react";
+import { useMemo, useEffect, useContext } from "react";
 import { useSearchParams, Link } from "react-router-dom";
+import { CartContext } from "../context/CartContext";
 
 export default function PedidoConfirmado() {
   const [params] = useSearchParams();
@@ -18,14 +19,19 @@ export default function PedidoConfirmado() {
     [paidParam]
   );
 
-  // Regras de exibição:
-  // - PIX => "Pagamento confirmado via Pix 🎉"
-  // - Cartão pago => "Pagamento aprovado via Cartão de Crédito 🎉"
-  // - Cartão não pago (caso algum dia essa página seja usada antes da aprovação) => "Aguardando aprovação"
-  // - Caso sem parâmetro válido => "Pedido registrado"
   const isPix = payment === "pix";
   const isCard = payment === "card";
   const isPaid = isPix || (isCard && paid);
+
+  const cartContext = useContext(CartContext);
+
+  // ✅ Limpa o carrinho quando a página representa um pagamento concluído
+  useEffect(() => {
+    if (!cartContext) return;
+    if (isPaid) {
+      cartContext.clearCart();
+    }
+  }, [isPaid, cartContext]);
 
   const renderMessage = () => {
     if (isPix) {
@@ -63,8 +69,7 @@ export default function PedidoConfirmado() {
         );
       }
 
-      // Fallback "aguardando aprovação" mantido por segurança/OCP,
-      // embora na regra atual essa página só deva ser acessada após aprovação.
+      // Fallback "aguardando aprovação"
       return (
         <>
           <h1 className="text-2xl font-semibold mb-2">

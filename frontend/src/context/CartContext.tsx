@@ -1,32 +1,34 @@
-import { createContext, useState, useEffect } from 'react';
-import type { ReactNode } from 'react';
-import type { CartItem } from './CartTypes';
-import { cookieStorage } from '../utils/cookieUtils';
+// src/context/CartContext.tsx
+import { createContext, useState, useEffect } from "react";
+import type { ReactNode } from "react";
+import type { CartItem, CartContextType } from "./CartTypes";
+import { cookieStorage } from "../utils/cookieUtils";
 
-export interface CartContextType {
-  cartItems: CartItem[];
-  addToCart: (item: CartItem) => void;
-  removeFromCart: (id: string) => void;
-  totalPrice: number;
-}
-
-export const CartContext = createContext<CartContextType | undefined>(undefined);
+export const CartContext = createContext<CartContextType | undefined>(
+  undefined
+);
 
 export const CartProvider = ({ children }: { children: ReactNode }) => {
   const [cartItems, setCartItems] = useState<CartItem[]>(() =>
-    cookieStorage.get<CartItem[]>('cart', [])
+    cookieStorage.get<CartItem[]>("cart", [])
   );
 
+  // Persiste o carrinho em cookie sempre que mudar
   useEffect(() => {
-    cookieStorage.set('cart', cartItems);
+    cookieStorage.set("cart", cartItems);
   }, [cartItems]);
 
   const addToCart = (item: CartItem) => {
     setCartItems((prev) => {
       const exists = prev.find((i) => i.id === item.id);
-      return exists
-        ? prev.map((i) => i.id === item.id ? { ...i, quantity: i.quantity + item.quantity } : i)
-        : [...prev, item];
+      if (exists) {
+        return prev.map((i) =>
+          i.id === item.id
+            ? { ...i, quantity: i.quantity + item.quantity }
+            : i
+        );
+      }
+      return [...prev, item];
     });
   };
 
@@ -34,11 +36,25 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
     setCartItems((prev) => prev.filter((i) => i.id !== id));
   };
 
-  const totalPrice = cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  const clearCart = () => {
+    // Fonte única de verdade: estado
+    setCartItems([]);
+  };
+
+  const totalPrice = cartItems.reduce(
+    (sum, item) => sum + item.price * item.quantity,
+    0
+  );
+
+  const value: CartContextType = {
+    cartItems,
+    totalPrice,
+    addToCart,
+    removeFromCart,
+    clearCart,
+  };
 
   return (
-    <CartContext.Provider value={{ cartItems, addToCart, removeFromCart, totalPrice }}>
-      {children}
-    </CartContext.Provider>
+    <CartContext.Provider value={value}>{children}</CartContext.Provider>
   );
 };

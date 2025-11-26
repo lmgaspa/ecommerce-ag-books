@@ -1,14 +1,23 @@
 // src/pages/PixPaymentPage.tsx
-import { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useCallback,
+  useContext,
+} from "react";
 import { useNavigate } from "react-router-dom";
 import type { CartItem } from "../context/CartTypes";
 import { formatPrice } from "../utils/formatPrice";
 import { calcularFreteComBaseEmCarrinho } from "../utils/freteUtils";
 import { cookieStorage } from "../utils/cookieUtils";
 import type { CheckoutFormData } from "../types/CheckoutTypes";
-import { analytics, mapCartItems } from "../analytics"; // ⬅️ adicionamos analytics aqui
+import { analytics, mapCartItems } from "../analytics";
 import { useCoupon } from "../hooks/useCoupon";
 import { apiPost, buildApiUrl } from "../api/http";
+import { CartContext } from "../context/CartContext";
+import { OrderSummary } from "../components/OrderSummary";
 
 function formatMMSS(totalSec: number) {
   const m = Math.floor(totalSec / 60);
@@ -82,8 +91,13 @@ const SecurityWarning = ({
 export default function PixPaymentPage() {
   const navigate = useNavigate();
   const { getDiscountAmount, couponCode } = useCoupon();
+  const cartContext = useContext(CartContext);
 
-  const initialCart: CartItem[] = cookieStorage.get<CartItem[]>("cart", []);
+  // Fonte de verdade do carrinho:
+  // 1) Se CartContext existir, usamos cartContext.cartItems.
+  // 2) Se não existir (fallback), lemos do cookie "cart".
+  const initialCart: CartItem[] =
+    cartContext?.cartItems ?? cookieStorage.get<CartItem[]>("cart", []);
 
   const [cartItems, setCartItems] = useState<CartItem[]>(initialCart);
   const [frete, setFrete] = useState<number | null>(null);
@@ -257,7 +271,7 @@ export default function PixPaymentPage() {
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : String(e);
         console.error(msg);
-        
+
         // Tratar erros específicos 409/422
         if (msg.includes("409") || msg.includes("422")) {
           setErrorMsg(
@@ -266,14 +280,23 @@ export default function PixPaymentPage() {
           setTimeout(() => navigate("/"), 2000);
           return;
         }
-        
+
         setErrorMsg(msg || "Erro ao gerar QR Code.");
       } finally {
         if (isMountedRef.current) setLoading(false);
       }
     };
     run();
-  }, [frete, cartItems, totalProdutos, desconto, totalComFrete, navigate, orderId, couponCode]);
+  }, [
+    frete,
+    cartItems,
+    totalProdutos,
+    desconto,
+    totalComFrete,
+    navigate,
+    orderId,
+    couponCode,
+  ]);
 
   // Contador regressivo
   useEffect(() => {
@@ -351,7 +374,16 @@ export default function PixPaymentPage() {
           window.clearInterval(timerRef.current);
           timerRef.current = null;
         }
-        cookieStorage.remove("cart");
+
+        // 🔑 Limpeza do carrinho:
+        // - Preferimos o CartContext (clearCart), se estiver disponível.
+        // - Mantemos fallback para remover o cookie diretamente, para não quebrar nada.
+        if (cartContext?.clearCart) {
+          cartContext.clearCart();
+        } else {
+          cookieStorage.remove("cart");
+        }
+
         const checkoutForm = cookieStorage.get<CheckoutFormData | null>(
           "checkoutForm",
           null
@@ -382,7 +414,7 @@ export default function PixPaymentPage() {
         }, wait);
       };
     },
-    [navigate, expiresAtMs, cartItems, frete, desconto, totalComFrete]
+    [navigate, expiresAtMs, cartItems, frete, desconto, totalComFrete, cartContext]
   );
 
   useEffect(() => {
@@ -413,6 +445,7 @@ export default function PixPaymentPage() {
       {/* Avisos de Segurança */}
       <SecurityWarning warning={warning} securityWarning={securityWarning} />
 
+      {/* Cards do carrinho */}
       <div className="space-y-4">
         {cartItems.map((item) => (
           <div
@@ -434,18 +467,13 @@ export default function PixPaymentPage() {
         ))}
       </div>
 
-      <div className="mt-6 text-right space-y-2">
-        <p className="text-lg">Subtotal: {formatPrice(totalProdutos)}</p>
-        <p className="text-lg">Frete: {formatPrice(frete ?? 0)}</p>
-        {desconto > 0 && (
-          <p className="text-lg text-green-600">
-            Desconto: -{formatPrice(desconto)}
-          </p>
-        )}
-        <p className="text-xl font-bold">
-          Total: {formatPrice(totalComFrete)}
-        </p>
-      </div>
+      {/* 🔁 Usa o componente compartilhado de resumo */}
+      <OrderSummary
+        subtotal={totalProdutos}
+        shipping={frete ?? 0}
+        discount={desconto}
+        total={totalComFrete}
+      />
 
       <div className="mt-8 flex justify-between">
         <button
@@ -458,7 +486,9 @@ export default function PixPaymentPage() {
       </div>
 
       {loading && (
-        <p className="text-center mt-8 text-gray-600">Gerando QR Code Pix...</p>
+        <p className="text-center mt-8 text-gray-600">
+          Gerando QR Code Pix...
+        </p>
       )}
 
       {qrCodeImg && (
