@@ -2,6 +2,11 @@
 import { useMemo, useEffect, useContext } from "react";
 import { useSearchParams, Link } from "react-router-dom";
 import { CartContext } from "../context/CartContext";
+import { analytics } from "../analytics";
+import type { AnalyticsPort } from "../analytics/AnalyticsPort";
+
+// Usa a própria porta como fonte da verdade do tipo (OCP friendly)
+type PurchaseParams = Parameters<AnalyticsPort["purchase"]>[0];
 
 export default function PedidoConfirmado() {
   const [params] = useSearchParams();
@@ -32,6 +37,91 @@ export default function PedidoConfirmado() {
       cartContext.clearCart();
     }
   }, [isPaid, cartContext]);
+
+  // ✅ Dispara o purchase do GA4 via fachada `analytics` usando snapshot salvo no sessionStorage
+  //    - Só roda em pedido "pago"
+  //    - Não envia PII (payload já foi montado só com dados de compra)
+  //    - Remove o snapshot depois para evitar reenvio em refresh
+  useEffect(() => {
+    if (!isPaid) return;
+    if (typeof window === "undefined") return;
+
+    const KEY = "ga_purchase_payload";
+
+    try {
+      const raw = sessionStorage.getItem(KEY);
+      if (!raw) return;
+
+      let parsed: any;
+      try {
+        parsed = JSON.parse(raw);
+      } catch {
+        sessionStorage.removeItem(KEY);
+        return;
+      }
+
+      if (!parsed || typeof parsed !== "object") {
+        sessionStorage.removeItem(KEY);
+        return;
+      }
+
+      const items = Array.isArray(parsed.items)
+        ? (parsed.items as PurchaseParams["items"])
+        : [];
+
+      const valueNumber = Number(parsed.value);
+      const shippingNumber =
+        parsed.shipping !== undefined && parsed.shipping !== null
+          ? Number(parsed.shipping)
+          : undefined;
+      const taxNumber =
+        parsed.tax !== undefined && parsed.tax !== null
+          ? Number(parsed.tax)
+          : undefined;
+
+      const payload: PurchaseParams = {
+        transaction_id:
+          typeof parsed.transaction_id === "string" &&
+          parsed.transaction_id.trim().length > 0
+            ? parsed.transaction_id
+            : orderId
+            ? String(orderId)
+            : "",
+        value: valueNumber,
+        currency:
+          typeof parsed.currency === "string" ? parsed.currency : "BRL",
+        shipping: shippingNumber,
+        tax: taxNumber,
+        items,
+        // Campos opcionais: se você começar a salvar no sessionStorage, eles entram lisos
+        payment_type:
+          typeof parsed.payment_type === "string"
+            ? parsed.payment_type
+            : undefined,
+        author_id:
+          typeof parsed.author_id === "number"
+            ? parsed.author_id
+            : undefined,
+      };
+
+      // Validação mínima antes de enviar
+      if (!payload.transaction_id || !Number.isFinite(payload.value)) {
+        sessionStorage.removeItem(KEY);
+        return;
+      }
+
+      // ✅ OCP: usamos apenas a fachada `analytics`. Se um dia trocar GA4 por outro, nada muda aqui.
+      analytics.purchase(payload);
+    } catch {
+      // falha silenciosa
+    } finally {
+      try {
+        sessionStorage.removeItem(KEY);
+      } catch {
+        // ignore
+      }
+    }
+  }, [isPaid, orderId]);
 
   const renderMessage = () => {
     if (isPix) {
@@ -86,9 +176,7 @@ export default function PedidoConfirmado() {
 
     // Fallback quando não veio payment ou veio inválido
     return (
-      <h1 className="text-2xl font-semibold mb-2">
-        Pedido registrado ✅
-      </h1>
+      <h1 className="text-2xl font-semibold mb-2">Pedido registrado ✅</h1>
     );
   };
 
