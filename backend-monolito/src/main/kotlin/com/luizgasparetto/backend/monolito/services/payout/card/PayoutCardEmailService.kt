@@ -418,7 +418,7 @@ class PayoutCardEmailService(
               <span role="img" aria-label="raio"
                     style="color:#ffd200;font-size:22px;vertical-align:middle;">&#x26A1;&#xFE0E;</span>
               <span style="vertical-align:middle;">© ${Year.now()} · Powered by
-                <strong>AndesCoreSoftware</strong>
+                <strong>AndesCore Software</strong>
               </span>
             </div>
           </div>
