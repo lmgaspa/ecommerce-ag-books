@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import type { Book } from "../../data/books";
+import type { Book } from "../../data/booksWithRelated";
+import { books as allBooks } from "../../data/booksWithRelated";
 import BookDescription from "./BookDescription";
 import BookAuthor from "./BookAuthor";
 import AdditionalInfo from "./AdditionalInfo";
@@ -59,6 +60,39 @@ const BookDetails = ({
     navigate("/cart");
   };
 
+  // Se relatedBooks vier vazio/undefined, calcula aqui com base no autor
+  const effectiveRelatedBooks =
+    relatedBooks && relatedBooks.length > 0
+      ? relatedBooks
+      : (() => {
+        const sameAuthorBooks = allBooks.filter(
+          (b) => b.author === author && b.id !== id
+        );
+
+        const totalSameAuthor = sameAuthorBooks.length;
+        if (totalSameAuthor === 0) return [];
+
+        // 2 livros → 1 relacionado
+        // 3 livros → 2 relacionados
+        // 4 livros → 3 relacionados
+        // 5+       → 3 relacionados aleatórios
+        const maxCount = Math.min(totalSameAuthor, 3);
+
+        const shuffled = [...sameAuthorBooks];
+        for (let i = shuffled.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+        }
+
+        return shuffled.slice(0, maxCount).map((b) => ({
+          id: b.id,
+          title: b.title,
+          imageUrl: b.imageUrl,
+          price: b.price,
+          category: b.category,
+        }));
+      })();
+
   return (
     <div className="container mx-auto my-16 px-4 ">
       <div className="flex flex-col md:flex-row items-start gap-16">
@@ -103,7 +137,7 @@ const BookDetails = ({
       </div>
 
       <AdditionalInfo additionalInfo={additionalInfo} />
-      <RelatedBooks relatedBooks={relatedBooks} />
+      <RelatedBooks relatedBooks={effectiveRelatedBooks} />
       <AuthorInfo author={author} />
     </div>
   );

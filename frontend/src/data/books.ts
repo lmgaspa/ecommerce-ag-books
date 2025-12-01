@@ -9,8 +9,8 @@ export interface Book {
   author: string;
   additionalInfo: Record<string, string>;
   category: string;
-  relatedBooks: { title: string; imageUrl: string; price: string; category: string; id: string }[];
   stock: number;
+  relatedBooks?: { title: string; imageUrl: string; price: string; category: string; id: string }[];
 }
 
 const agenorGasparetto = "Agenor Gasparetto";
@@ -36,11 +36,7 @@ export const books: Book[] = [
       Idioma: idioma
     },
     category: "Crônicas",
-    stock: 100,
-    relatedBooks: [
-      { id: "regressantes", title: "Regressantes", imageUrl: "/images/regressantes.webp", price: "R$20,00", category: "Contos" },
-      { id: "sempre", title: "Para sempre felizes: coisas de neto", imageUrl: "/images/sempre.webp", price: "R$20,00", category: "Infantojuvenil" }
-    ]
+    stock: 100
   },
   {
     id: "regressantes",
@@ -60,11 +56,7 @@ export const books: Book[] = [
       Idioma: idioma
     },
     category: "Contos",
-    stock: 100,
-    relatedBooks: [
-      { id: "extase", title: "Êxtase, de birra com Jorge Amado e outras crônicas grapiúnas", imageUrl: "/images/extase.webp", price: "R$29,90", category: "Crônicas" },
-      { id: "sempre", title: "Para sempre felizes: coisas de neto", imageUrl: "/images/sempre.webp", price: "R$20,00", category: "Infantojuvenil" }
-    ]
+    stock: 100
   },
   {
     id: "sempre",
@@ -84,11 +76,7 @@ export const books: Book[] = [
       Idioma: idioma
     },
     category: "Infantojuvenil",
-    stock: 100,
-    relatedBooks: [
-      { id: "extase", title: "Êxtase, de birra com Jorge Amado e outras crônicas grapiúnas", imageUrl: "/images/extase.webp", price: "R$29,90", category: "Crônicas" },
-      { id: "regressantes", title: "Regressantes", imageUrl: "/images/regressantes.webp", price: "R$20,00", category: "Contos" }
-    ]
+    stock: 100
   },
   {
     id: "versos",
@@ -108,11 +96,7 @@ export const books: Book[] = [
       Idioma: idioma
     },
     category: "Poemas",
-    stock: 100,
-    relatedBooks: [
-      { id: "extase", title: "Êxtase, de birra com Jorge Amado e outras crônicas grapiúnas", imageUrl: "/images/extase.webp", price: "R$29,90", category: "Crônicas" },
-      { id: "regressantes", title: "Regressantes", imageUrl: "/images/regressantes.webp", price: "R$20,00", category: "Contos" }
-    ],
+    stock: 100
   },
   {
     id: "versi",
@@ -132,10 +116,6 @@ export const books: Book[] = [
       Idioma: idioma
     },
     category: "Poemas",
-    stock: 100,
-    relatedBooks: [
-      { id: "extase", title: "Êxtase, de birra com Jorge Amado e outras crônicas grapiúnas", imageUrl: "/images/extase.webp", price: "R$29,90", category: "Crônicas" },
-      { id: "regressantes", title: "Regressantes", imageUrl: "/images/regressantes.webp", price: "R$20,00", category: "Contos" }
-    ],
+    stock: 100
   }
 ];

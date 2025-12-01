@@ -1,7 +1,7 @@
 import { useMemo, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import type { Book } from "../data/books";
-import { books as localBooks } from "../data/books";
+import type { Book } from "../data/booksWithRelated";
+import { books as localBooks } from "../data/booksWithRelated";
 import { descriptions } from "../data/descriptions";
 import { useCart } from "../hooks/useCart";
 import { useStockByIds } from "../hooks/useStockByIds";
@@ -29,7 +29,7 @@ const BooksListPage = () => {
           const localDescription = descriptions[apiBook.id as keyof typeof descriptions];
           // Busca dados completos do livro local (para pegar relatedBooks, additionalInfo, etc)
           const localBook = localBooks.find((b) => b.id === apiBook.id);
-          
+
           return {
             ...apiBook,
             // Descrição sempre do frontend (descriptions.ts)
@@ -98,7 +98,7 @@ const BooksListPage = () => {
             <div key={book.id} className="bg-background rounded-md shadow-md p-4 flex flex-col">
               <img src={book.imageUrl} alt={book.title} className="w-full max-w-xs rounded-md shadow-md mb-4 mx-auto" />
               <h2 className="text-2xl font-semibold text-primary mb-1">{book.title}</h2>
-              
+
               <div className="mb-4">
                 <p className="text-lg text-secondary mb-3">
                   <BookPrice price={book.price} />
