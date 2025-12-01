@@ -1,12 +1,18 @@
+// src/pages/BookPage.tsx
 import { useMemo } from "react";
 import { useParams } from "react-router-dom";
-import { books } from "../data/books";
+import { books } from "../data/booksWithRelated"; // <-- aqui muda
 import BookDetails from "../components/book/BookDetails";
 import { useStockByIds } from "../hooks/useStockByIds";
 
 export default function BookPage() {
   const { id } = useParams<{ id: string }>();
-  const book = useMemo(() => books.find((b) => b.id === id), [id]);
+
+  const book = useMemo(
+    () => books.find((b) => b.id === id),
+    [id]
+  );
+
   const idArr = useMemo(() => (id ? [id] : []), [id]);
   const { data: stockMap, loading } = useStockByIds(idArr);
 
