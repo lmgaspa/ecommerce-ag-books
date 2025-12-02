@@ -60,7 +60,7 @@ CREATE INDEX IF NOT EXISTS idx_books_author_id ON books(author_id);
 CREATE INDEX IF NOT EXISTS idx_books_stock      ON books(stock);
 
 -- =====================================================================
--- 2) COUPONS e ORDER_COUPONS
+-- 2) COUPONS
 -- =====================================================================
 
 CREATE TABLE IF NOT EXISTS coupons (
@@ -104,48 +104,8 @@ BEGIN
 END;
 $$;
 
-CREATE TABLE IF NOT EXISTS order_coupons (
-  id              BIGSERIAL PRIMARY KEY,
-  order_id        BIGINT NOT NULL,
-  coupon_id       BIGINT NOT NULL,
-  original_total  NUMERIC(38,2) NOT NULL,
-  discount_amount NUMERIC(38,2) NOT NULL,
-  final_total     NUMERIC(38,2) NOT NULL,
-  created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
-  CONSTRAINT order_coupons_order_id_coupon_id_key UNIQUE(order_id, coupon_id),
-  CONSTRAINT order_coupons_order_id_fkey
-    FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
-  CONSTRAINT order_coupons_coupon_id_fkey
-    FOREIGN KEY (coupon_id) REFERENCES coupons(id) ON DELETE CASCADE
-);
-
-CREATE INDEX IF NOT EXISTS idx_order_coupons_order_id  ON order_coupons(order_id);
-CREATE INDEX IF NOT EXISTS idx_order_coupons_coupon_id ON order_coupons(coupon_id);
-
 -- =====================================================================
--- 3) ORDER_COUPONS
--- =====================================================================
-
-CREATE TABLE IF NOT EXISTS order_coupons (
-  id              BIGSERIAL PRIMARY KEY,
-  order_id        BIGINT NOT NULL,
-  coupon_id       BIGINT NOT NULL,
-  original_total  NUMERIC(38,2) NOT NULL,
-  discount_amount NUMERIC(38,2) NOT NULL,
-  final_total     NUMERIC(38,2) NOT NULL,
-  created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
-  CONSTRAINT order_coupons_order_id_coupon_id_key UNIQUE(order_id, coupon_id),
-  CONSTRAINT order_coupons_order_id_fkey
-    FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
-  CONSTRAINT order_coupons_coupon_id_fkey
-    FOREIGN KEY (coupon_id) REFERENCES coupons(id) ON DELETE CASCADE
-);
-
-CREATE INDEX IF NOT EXISTS idx_order_coupons_order_id  ON order_coupons(order_id);
-CREATE INDEX IF NOT EXISTS idx_order_coupons_coupon_id ON order_coupons(coupon_id);
-
--- =====================================================================
--- 4) ORDERS e ORDER_ITEMS
+-- 3) ORDERS e ORDER_ITEMS
 -- =====================================================================
 
 CREATE TABLE IF NOT EXISTS orders (
@@ -225,6 +185,28 @@ CREATE TABLE IF NOT EXISTS order_items (
   CONSTRAINT fkbioxgbv59vetrxe0ejfubep1w
     FOREIGN KEY (order_id) REFERENCES orders(id)
 );
+
+-- =====================================================================
+-- 4) ORDER_COUPONS
+-- =====================================================================
+
+CREATE TABLE IF NOT EXISTS order_coupons (
+  id              BIGSERIAL PRIMARY KEY,
+  order_id        BIGINT NOT NULL,
+  coupon_id       BIGINT NOT NULL,
+  original_total  NUMERIC(38,2) NOT NULL,
+  discount_amount NUMERIC(38,2) NOT NULL,
+  final_total     NUMERIC(38,2) NOT NULL,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CONSTRAINT order_coupons_order_id_coupon_id_key UNIQUE(order_id, coupon_id),
+  CONSTRAINT order_coupons_order_id_fkey
+    FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
+  CONSTRAINT order_coupons_coupon_id_fkey
+    FOREIGN KEY (coupon_id) REFERENCES coupons(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_order_coupons_order_id  ON order_coupons(order_id);
+CREATE INDEX IF NOT EXISTS idx_order_coupons_coupon_id ON order_coupons(coupon_id);
 
 -- =====================================================================
 -- 5) PAYMENT AUTHOR REGISTRY / ACCOUNTS / SITE AUTHOR
