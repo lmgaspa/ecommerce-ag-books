@@ -364,7 +364,7 @@ export default function CardPaymentPage() {
     setErrorMsg(null);
 
     try {
-      // GA4: add_payment_info – mantemos OCP, só enriquecemos com payment_type
+      // GA4: add_payment_info – OCP: só conversa com fachada analytics
       try {
         analytics.addPaymentInfo({
           items: mapCartItems(cart),
@@ -374,7 +374,7 @@ export default function CardPaymentPage() {
           currency: "BRL",
         });
       } catch {
-        // tracking nunca quebra tela
+        /* no-op */
       }
 
       // Tokenize with Efí
@@ -395,7 +395,8 @@ export default function CardPaymentPage() {
         paymentToken: tokenResp.payment_token,
         installments,
         cartItems: cart,
-        total: subtotal + shipping, // Total original SEM desconto
+        // backend usa total original SEM desconto para validar e aplicar cupom
+        total: subtotal + shipping,
         shipping,
         discount: desconto,
         couponCode: couponCode || null,
@@ -405,6 +406,8 @@ export default function CardPaymentPage() {
         "/checkout/card",
         payload
       );
+
+      // Guardamos para mostrar TTL/avisos se fizer sentido
       setCheckoutResponse(data);
 
       const paidStatuses = ["PAID", "APPROVED", "CAPTURED", "CONFIRMED"];
@@ -412,41 +415,40 @@ export default function CardPaymentPage() {
         ? paidStatuses.includes(String(data.status).toUpperCase())
         : false;
 
-      if (!isPaid || !data.orderId) {
-        // Não limpa carrinho, não navega
+      // Se não teve sucesso ou não está pago ou não veio orderId, fica na tela
+      if (!data.success || !isPaid || !data.orderId) {
         setErrorMsg(
-          "Não foi possível aprovar o pagamento com este cartão. Tente novamente ou use outra forma de pagamento."
+          data.message ||
+            (data.success
+              ? "Pagamento ainda não foi aprovado. Tente novamente em alguns instantes ou use outra forma de pagamento."
+              : "Não foi possível processar o pagamento. Verifique os dados e tente novamente.")
         );
         return;
       }
 
-      // Só aqui limpamos carrinho (pagamento aprovado)
+      // ✅ A partir daqui é COMPRA CONCLUÍDA: podemos limpar o carrinho
       if (cartContext?.clearCart) {
         cartContext.clearCart();
       } else {
         cookieStorage.remove("cart");
       }
 
-      // Prepara GA4 purchase para a tela de confirmação
-      try {
-        const purchasePayload = {
-          transaction_id: String(data.orderId),
-          value: Number(total),
-          currency: "BRL",
-          shipping: Number(shipping || 0),
-          tax: 0,
-          items: mapCartItems(cart),
-          payment_type: "credit_card",
-        };
-        sessionStorage.setItem(
-          "ga_purchase_payload",
-          JSON.stringify(purchasePayload)
-        );
-      } catch {
-        // no-op
-      }
+      // Snapshot para PedidoConfirmado disparar analytics.purchase
+      const purchasePayload = {
+        transaction_id: String(data.orderId),
+        value: Number(total),
+        currency: "BRL",
+        shipping: Number(shipping || 0),
+        tax: 0,
+        items: mapCartItems(cart),
+        payment_type: "credit_card",
+      };
+      sessionStorage.setItem(
+        "ga_purchase_payload",
+        JSON.stringify(purchasePayload)
+      );
 
-      // Agora sim, navega para PedidoConfirmado como "pago"
+      // Vai para a tela de confirmação, marcada como paga
       navigate(
         `/pedido-confirmado?orderId=${data.orderId}&payment=card&paid=true`
       );
