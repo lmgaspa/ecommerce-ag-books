@@ -364,7 +364,7 @@ export default function CardPaymentPage() {
     setErrorMsg(null);
 
     try {
-      // GA4: add_payment_info – mantemos o fluxo e só enriquecemos com payment_type (OCP)
+      // GA4: add_payment_info – mantemos OCP, só enriquecemos com payment_type
       try {
         analytics.addPaymentInfo({
           items: mapCartItems(cart),
@@ -374,7 +374,7 @@ export default function CardPaymentPage() {
           currency: "BRL",
         });
       } catch {
-        /* no-op */
+        // tracking nunca quebra tela
       }
 
       // Tokenize with Efí
@@ -407,22 +407,28 @@ export default function CardPaymentPage() {
       );
       setCheckoutResponse(data);
 
-      // 🔑 Limpeza do carrinho:
-      // - Preferimos CartContext (clearCart), se existir
-      // - Mantemos fallback para cookie (não quebra legado)
+      const paidStatuses = ["PAID", "APPROVED", "CAPTURED", "CONFIRMED"];
+      const isPaid = data.status
+        ? paidStatuses.includes(String(data.status).toUpperCase())
+        : false;
+
+      if (!isPaid || !data.orderId) {
+        // Não limpa carrinho, não navega
+        setErrorMsg(
+          "Não foi possível aprovar o pagamento com este cartão. Tente novamente ou use outra forma de pagamento."
+        );
+        return;
+      }
+
+      // Só aqui limpamos carrinho (pagamento aprovado)
       if (cartContext?.clearCart) {
         cartContext.clearCart();
       } else {
         cookieStorage.remove("cart");
       }
 
-      const paidStatuses = ["PAID", "APPROVED", "CAPTURED", "CONFIRMED"];
-      const isPaid = data.status
-        ? paidStatuses.includes(String(data.status).toUpperCase())
-        : false;
-
-      // Se pago, prepara purchase para a tela de confirmação
-      if (isPaid && data.orderId) {
+      // Prepara GA4 purchase para a tela de confirmação
+      try {
         const purchasePayload = {
           transaction_id: String(data.orderId),
           value: Number(total),
@@ -430,19 +436,19 @@ export default function CardPaymentPage() {
           shipping: Number(shipping || 0),
           tax: 0,
           items: mapCartItems(cart),
-          // sobe até PedidoConfirmado → analytics.purchase
           payment_type: "credit_card",
         };
         sessionStorage.setItem(
           "ga_purchase_payload",
           JSON.stringify(purchasePayload)
         );
+      } catch {
+        // no-op
       }
 
+      // Agora sim, navega para PedidoConfirmado como "pago"
       navigate(
-        `/pedido-confirmado?orderId=${data.orderId}&payment=card&paid=${
-          isPaid ? "true" : "false"
-        }`
+        `/pedido-confirmado?orderId=${data.orderId}&payment=card&paid=true`
       );
     } catch (e) {
       setErrorMsg(e instanceof Error ? e.message : "Falha no pagamento.");
