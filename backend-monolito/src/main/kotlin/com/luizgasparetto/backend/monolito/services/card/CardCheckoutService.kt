@@ -11,6 +11,7 @@ import com.luizgasparetto.backend.monolito.services.book.BookService
 import com.luizgasparetto.backend.monolito.services.coupon.CouponService
 import com.luizgasparetto.backend.monolito.repositories.OrderCouponRepository
 import com.luizgasparetto.backend.monolito.models.coupon.OrderCoupon
+import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -66,14 +67,15 @@ class CardCheckoutService(
         }
         reserveItemsTx(order, reserveTtlSeconds)
 
-        // 2) montar itens e cliente para Efí
-        val itemsForEfi = request.cartItems.map {
-            mapOf(
-                "name" to it.title,
-                "value" to it.price.toBigDecimal().multiply(BigDecimal(100)).setScale(0, RoundingMode.HALF_UP).toInt(),
-                "amount" to it.quantity
-            )
-        }
+        // 2) distribuir desconto entre itens e frete para alinhar com finalTotal
+        val distributionResult = DiscountDistributionHelper.distributeDiscount(
+            cartItems = request.cartItems,
+            shipping = request.shipping,
+            discountAmount = discountAmount,
+            finalTotal = finalTotal,
+            logger = log
+        )
+        
         val customer = mapOf(
             "name" to "${request.firstName} ${request.lastName}",
             "cpf" to request.cpf.filter { it.isDigit() },
@@ -81,22 +83,17 @@ class CardCheckoutService(
             "phone_number" to request.phone.filter { it.isDigit() }.ifBlank { null }
         )
 
-        val shippingCents = request.shipping.toBigDecimal()
-            .setScale(2, RoundingMode.HALF_UP)
-            .multiply(BigDecimal(100))
-            .toInt()
-
         // 3) cobrança cartão (one-step) – por padrão, usando `shippings`
         val result = try {
             cardService.createOneStepCharge(
                 totalAmount = finalTotal,
-                items = itemsForEfi,
+                items = distributionResult.itemsForEfi,
                 paymentToken = request.paymentToken,
                 installments = request.installments,
                 customer = customer,
                 txid = txid,
-                shippingCents = shippingCents,      // manda no campo `shippings`
-                addShippingAsItem = false           // mude para true se quiser como item "Frete"
+                shippingCents = distributionResult.shippingCents,
+                addShippingAsItem = false
             )
         } catch (e: Exception) {
             log.error("CARD: falha ao cobrar, liberando reserva. orderId={}, err={}", order.id, e.message, e)
@@ -291,6 +288,250 @@ class CardCheckoutService(
             order.reserveExpiresAt = null
             orderRepository.save(order)
             log.info("CARD-RESERVA LIBERADA: orderId={}", orderId)
+        }
+    }
+
+    /**
+     * Helper class to distribute discount across items and shipping so that
+     * the sum of adjusted values matches the finalTotal exactly in cents.
+     * 
+     * Strategy (Option A - Simple):
+     * 1. First try to apply entire discount to shipping
+     * 2. If discount <= shipping, reduce shipping only
+     * 3. If discount > shipping, reduce shipping to 0 and distribute remaining discount proportionally among items
+     */
+    private object DiscountDistributionHelper {
+        data class DistributionResult(
+            val itemsForEfi: List<Map<String, Any>>,
+            val shippingCents: Int
+        )
+
+        fun distributeDiscount(
+            cartItems: List<CardCartItemDto>,
+            shipping: Double,
+            discountAmount: BigDecimal,
+            finalTotal: BigDecimal,
+            logger: Logger
+        ): DistributionResult {
+            // Convert original values to cents
+            val itemsWithCents = cartItems.map { item ->
+                val unitPriceCents = item.price.toBigDecimal()
+                    .setScale(2, RoundingMode.HALF_UP)
+                    .multiply(BigDecimal(100))
+                    .toInt()
+                val lineTotalCents = unitPriceCents * item.quantity
+                ItemWithCents(
+                    dto = item,
+                    unitPriceCents = unitPriceCents,
+                    lineTotalCents = lineTotalCents
+                )
+            }
+
+            val shippingCents = shipping.toBigDecimal()
+                .setScale(2, RoundingMode.HALF_UP)
+                .multiply(BigDecimal(100))
+                .toInt()
+
+            val originalCentsTotal = itemsWithCents.sumOf { it.lineTotalCents } + shippingCents
+            val discountCents = discountAmount.setScale(2, RoundingMode.HALF_UP)
+                .multiply(BigDecimal(100))
+                .toInt()
+            val targetCents = originalCentsTotal - discountCents
+
+            logger.info("💰 DISTRIBUIÇÃO DE DESCONTO:")
+            logger.info("  - Total original (cents): {}", originalCentsTotal)
+            logger.info("  - Desconto (cents): {}", discountCents)
+            logger.info("  - Total alvo (cents): {}", targetCents)
+
+            // If no discount, return original values
+            if (discountCents <= 0) {
+                return DistributionResult(
+                    itemsForEfi = itemsWithCents.map { item ->
+                        mapOf(
+                            "name" to item.dto.title,
+                            "value" to item.unitPriceCents,
+                            "amount" to item.dto.quantity
+                        )
+                    },
+                    shippingCents = shippingCents
+                )
+            }
+
+            // Strategy: Apply discount to shipping first, then to items if needed
+            val (adjustedShippingCents, remainingDiscountCents) = if (discountCents <= shippingCents) {
+                // Discount fits entirely in shipping
+                Pair(shippingCents - discountCents, 0)
+            } else {
+                // Discount exceeds shipping, reduce shipping to 0
+                Pair(0, discountCents - shippingCents)
+            }
+
+            // Distribute remaining discount proportionally among items
+            val adjustedItems = if (remainingDiscountCents > 0) {
+                distributeDiscountAmongItems(itemsWithCents, remainingDiscountCents, logger)
+            } else {
+                // No discount on items, keep original values
+                itemsWithCents.map { item ->
+                    AdjustedItem(
+                        dto = item.dto,
+                        adjustedUnitPriceCents = item.unitPriceCents,
+                        adjustedLineTotalCents = item.lineTotalCents
+                    )
+                }
+            }
+
+            // Build final items for Efí
+            val itemsForEfi = adjustedItems.map { item ->
+                mapOf(
+                    "name" to item.dto.title,
+                    "value" to item.adjustedUnitPriceCents,
+                    "amount" to item.dto.quantity
+                )
+            }
+
+            val finalSumCents = adjustedItems.sumOf { it.adjustedLineTotalCents } + adjustedShippingCents
+
+            logger.info("💰 DISTRIBUIÇÃO FINAL:")
+            logger.info("  - Frete ajustado (cents): {}", adjustedShippingCents)
+            adjustedItems.forEachIndexed { index, item ->
+                logger.info("  - Item {}: {} x {} = {} cents", index + 1, item.adjustedUnitPriceCents, item.dto.quantity, item.adjustedLineTotalCents)
+            }
+            logger.info("  - Soma final (cents): {}", finalSumCents)
+            logger.info("  - Total alvo (cents): {}", targetCents)
+            logger.info("  - ✅ Soma final {} total alvo", if (finalSumCents == targetCents) "==" else "!=")
+
+            return DistributionResult(
+                itemsForEfi = itemsForEfi,
+                shippingCents = adjustedShippingCents
+            )
+        }
+
+        private data class ItemWithCents(
+            val dto: CardCartItemDto,
+            val unitPriceCents: Int,
+            val lineTotalCents: Int
+        )
+
+        private data class AdjustedItem(
+            val dto: CardCartItemDto,
+            val adjustedUnitPriceCents: Int,
+            val adjustedLineTotalCents: Int
+        )
+
+        /**
+         * Distributes discount proportionally among items, ensuring:
+         * - No line goes negative
+         * - Integer cents are properly handled
+         * - Total discount matches remainingDiscountCents exactly
+         */
+        private fun distributeDiscountAmongItems(
+            items: List<ItemWithCents>,
+            remainingDiscountCents: Int,
+            logger: Logger
+        ): List<AdjustedItem> {
+            if (items.isEmpty()) {
+                return emptyList()
+            }
+
+            val itemsTotalCents = items.sumOf { it.lineTotalCents }
+            val targetItemsSumCents = itemsTotalCents - remainingDiscountCents
+            
+            if (itemsTotalCents <= 0 || targetItemsSumCents < 0) {
+                logger.warn("⚠️ Total de itens é zero ou desconto excede total, não é possível distribuir desconto")
+                return items.map { item ->
+                    AdjustedItem(
+                        dto = item.dto,
+                        adjustedUnitPriceCents = item.unitPriceCents,
+                        adjustedLineTotalCents = item.lineTotalCents
+                    )
+                }
+            }
+
+            // Calculate proportional discount per item (using floor to avoid over-discounting)
+            val discountsPerItem = mutableListOf<Int>()
+            var totalDiscountApplied = 0
+
+            items.forEachIndexed { index, item ->
+                val proportionalDiscount = if (itemsTotalCents > 0) {
+                    (item.lineTotalCents.toBigDecimal() * remainingDiscountCents.toBigDecimal())
+                        .divide(itemsTotalCents.toBigDecimal(), 0, RoundingMode.FLOOR)
+                        .toInt()
+                        .coerceAtMost(item.lineTotalCents)
+                } else {
+                    0
+                }
+                discountsPerItem.add(proportionalDiscount)
+                totalDiscountApplied += proportionalDiscount
+            }
+
+            // Distribute remaining cents (due to rounding) to ensure exact match
+            var remainingToDistribute = remainingDiscountCents - totalDiscountApplied
+            if (remainingToDistribute > 0) {
+                // Distribute to items with capacity, starting from largest remaining capacity
+                val itemsWithCapacity = items.mapIndexedNotNull { index, item ->
+                    val discountApplied = discountsPerItem[index]
+                    val remainingCapacity = item.lineTotalCents - discountApplied
+                    if (remainingCapacity > 0) {
+                        index to remainingCapacity
+                    } else {
+                        null
+                    }
+                }.sortedByDescending { it.second }
+
+                itemsWithCapacity.forEach { (index, _) ->
+                    if (remainingToDistribute > 0) {
+                        discountsPerItem[index]++
+                        remainingToDistribute--
+                    }
+                }
+            }
+
+            // Build adjusted items with exact line totals
+            val adjustedItems = items.mapIndexed { index, item ->
+                val discountApplied = discountsPerItem[index]
+                val adjustedLineTotalCents = (item.lineTotalCents - discountApplied).coerceAtLeast(1)
+                
+                // Calculate unit price from adjusted line total
+                val adjustedUnitPriceCents = if (item.dto.quantity > 0) {
+                    (adjustedLineTotalCents / item.dto.quantity).coerceAtLeast(1)
+                } else {
+                    item.unitPriceCents
+                }
+                
+                AdjustedItem(
+                    dto = item.dto,
+                    adjustedUnitPriceCents = adjustedUnitPriceCents,
+                    adjustedLineTotalCents = adjustedLineTotalCents
+                )
+            }
+
+            // Ensure exact match by adjusting the last item if needed
+            val currentSum = adjustedItems.sumOf { it.adjustedLineTotalCents }
+            val difference = targetItemsSumCents - currentSum
+
+            if (difference != 0 && adjustedItems.isNotEmpty()) {
+                val lastIndex = adjustedItems.size - 1
+                val lastItem = adjustedItems[lastIndex]
+                val originalItem = items[lastIndex]
+                
+                val newLineTotal = (lastItem.adjustedLineTotalCents + difference).coerceIn(
+                    1,
+                    originalItem.lineTotalCents
+                )
+                val newUnitPrice = if (lastItem.dto.quantity > 0) {
+                    (newLineTotal / lastItem.dto.quantity).coerceAtLeast(1)
+                } else {
+                    lastItem.adjustedUnitPriceCents
+                }
+                
+                return adjustedItems.dropLast(1) + AdjustedItem(
+                    dto = lastItem.dto,
+                    adjustedUnitPriceCents = newUnitPrice,
+                    adjustedLineTotalCents = newLineTotal
+                )
+            }
+
+            return adjustedItems
         }
     }
 }
