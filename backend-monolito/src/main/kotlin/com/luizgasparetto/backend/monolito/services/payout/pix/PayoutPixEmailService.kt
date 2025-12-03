@@ -40,6 +40,37 @@ class PayoutPixEmailService(
         DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm:ss", Locale.forLanguageTag("pt-BR"))
 
     // ----------------------------------------------------------------
+    // IDEMPOTÊNCIA: checa se já existe e-mail de REPASSE_PIX SENT
+    // ----------------------------------------------------------------
+
+    private fun alreadySentConfirmedRepasse(orderId: Long): Boolean {
+        val payoutId = findPayoutIdByOrderId(orderId)
+
+        if (payoutId == null) {
+            log.warn(
+                "PayoutEmail [PIX]: não foi possível encontrar payoutId para orderId={}, não será feita checagem de idempotência.",
+                orderId
+            )
+            return false
+        }
+
+        val exists = payoutEmailRepository.existsByPayoutIdAndEmailTypeAndStatus(
+            payoutId,
+            PayoutEmailType.REPASSE_PIX.name,   // String, casa com emailType
+            PayoutEmailStatus.SENT
+        )
+
+        if (exists) {
+            log.info(
+                "PayoutEmail [PIX]: e-mail REPASSE_PIX já enviado (payoutId={}, orderId={}), pulando novo envio.",
+                payoutId, orderId
+            )
+        }
+
+        return exists
+    }
+
+    // ----------------------------------------------------------------
     // PÚBLICO: SUCESSO
     // ----------------------------------------------------------------
 
@@ -54,12 +85,18 @@ class PayoutPixEmailService(
         extraNote: String? = null,
         to: String = authorEmail              // pode sobrescrever para multi-autor
     ) {
-        val from = resolveFrom()
-
         log.info(
             "📧 PAYOUT PIX EMAIL [CONFIRMED]: iniciando envio - orderId={}, to={}, sandbox={}, mailHost={}",
             orderId, to, sandbox, mailHost
         )
+
+        // 🔒 Idempotência: se já existe e-mail SENT de REPASSE_PIX para este payout, não envia de novo
+        if (alreadySentConfirmedRepasse(orderId)) {
+            return
+        }
+
+        val from = resolveFrom()
+
         log.debug(
             "📧 PAYOUT PIX EMAIL [CONFIRMED]: config -> from={}, authorEmail={}, appTz={}, favoredKeyFromConfig={}, logoUrl={}",
             from, authorEmail, appTz, favoredKeyFromConfig, logoUrl
