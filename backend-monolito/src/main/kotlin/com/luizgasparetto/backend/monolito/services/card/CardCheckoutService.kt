@@ -3,22 +3,23 @@ package com.luizgasparetto.backend.monolito.services.card
 import com.luizgasparetto.backend.monolito.dto.card.CardCartItemDto
 import com.luizgasparetto.backend.monolito.dto.card.CardCheckoutRequest
 import com.luizgasparetto.backend.monolito.dto.card.CardCheckoutResponse
+import com.luizgasparetto.backend.monolito.exceptions.PaymentGatewayException
+import com.luizgasparetto.backend.monolito.models.coupon.OrderCoupon
 import com.luizgasparetto.backend.monolito.models.order.Order
 import com.luizgasparetto.backend.monolito.models.order.OrderItem
 import com.luizgasparetto.backend.monolito.models.order.OrderStatus
+import com.luizgasparetto.backend.monolito.repositories.OrderCouponRepository
 import com.luizgasparetto.backend.monolito.repositories.OrderRepository
 import com.luizgasparetto.backend.monolito.services.book.BookService
 import com.luizgasparetto.backend.monolito.services.coupon.CouponService
-import com.luizgasparetto.backend.monolito.repositories.OrderCouponRepository
-import com.luizgasparetto.backend.monolito.models.coupon.OrderCoupon
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.math.BigDecimal
+import java.math.RoundingMode
 import java.time.OffsetDateTime
 import java.util.UUID
-import java.math.RoundingMode
 
 @Service
 @Transactional
@@ -37,11 +38,11 @@ class CardCheckoutService(
     fun processCardCheckout(request: CardCheckoutRequest): CardCheckoutResponse {
         // 0) valida estoque e total no servidor
         request.cartItems.forEach { item -> bookService.validateStock(item.id, item.quantity) }
-        
+
         // 0.1) calcula total original e processa desconto
         val originalTotal = calculateOriginalTotal(request.shipping, request.cartItems)
         val (finalTotal, discountAmount) = processDiscount(request, originalTotal)
-        
+
         // Log detalhado para debug
         log.info("💳 CHECKOUT CARD - Dados recebidos:")
         log.info("  - Total do request: {}", request.total)
@@ -51,13 +52,13 @@ class CardCheckoutService(
         log.info("  - Total calculado (original): {}", originalTotal)
         log.info("  - Desconto aplicado: {}", discountAmount)
         log.info("  - Total final: {}", finalTotal)
-        
+
         // Validação de segurança: garantir que o total final seja sempre >= 0.01
         if (finalTotal < BigDecimal("0.01")) {
             log.error("❌ Total final muito baixo: {} - Rejeitando checkout", finalTotal)
             throw IllegalArgumentException("Valor do pedido muito baixo. Valor mínimo: R$ 0,01")
         }
-        
+
         val txid = "CARD-" + UUID.randomUUID().toString().replace("-", "").take(30)
 
         // 1) cria pedido base + reserva TTL
@@ -75,7 +76,7 @@ class CardCheckoutService(
             finalTotal = finalTotal,
             logger = log
         )
-        
+
         val customer = mapOf(
             "name" to "${request.firstName} ${request.lastName}",
             "cpf" to request.cpf.filter { it.isDigit() },
@@ -98,12 +99,11 @@ class CardCheckoutService(
         } catch (e: Exception) {
             log.error("CARD: falha ao cobrar, liberando reserva. orderId={}, err={}", order.id, e.message, e)
             releaseReservationTx(order.id!!)
-            return CardCheckoutResponse(
-                success = false,
-                message = "Pagamento não processado. Tente novamente.",
-                orderId = order.id.toString(),
-                chargeId = null,
-                status = "FAILED"
+
+            // 🔴 Aqui a mudança: não devolve CardCheckoutResponse, lança erro de gateway
+            throw PaymentGatewayException(
+                message = "Não foi possível comunicar com o processador de cartão. Tente novamente em instantes.",
+                gatewayCode = "CARD_ONE_STEP_ERROR"
             )
         }
 
@@ -129,17 +129,17 @@ class CardCheckoutService(
 
         if (result.paid && !fresh.chargeId.isNullOrBlank()) {
             processor.markPaidIfNeededByChargeId(fresh.chargeId!!)
-        return CardCheckoutResponse(
-            success = true,
-            message = "Pagamento aprovado.",
-            orderId = fresh.id.toString(),
-            chargeId = fresh.chargeId,
-            status = result.status,
-            reserveExpiresAt = fresh.reserveExpiresAt?.toString(),
-            ttlSeconds = reserveTtlSeconds,
-            warningAt = 60, // Avisar quando faltar 60 segundos
-            securityWarningAt = 60 // INVALIDAR quando faltar 60 segundos (segurança máxima)
-        )
+            return CardCheckoutResponse(
+                success = true,
+                message = "Pagamento aprovado.",
+                orderId = fresh.id.toString(),
+                chargeId = fresh.chargeId,
+                status = result.status,
+                reserveExpiresAt = fresh.reserveExpiresAt?.toString(),
+                ttlSeconds = reserveTtlSeconds,
+                warningAt = 60, // Avisar quando faltar 60 segundos
+                securityWarningAt = 60 // INVALIDAR quando faltar 60 segundos (segurança máxima)
+            )
         }
 
         // watcher opcional
@@ -192,9 +192,7 @@ class CardCheckoutService(
             return Pair(originalTotal, BigDecimal.ZERO)
         }
 
-        // SEGURANÇA: O backend é a fonte da verdade para o desconto.
-        // Ignoramos completamente o request.discount do frontend para evitar manipulação.
-        // O frontend deve enviar apenas o couponCode, e o backend recalcula tudo do zero.
+        // Backend é fonte da verdade: ignora request.discount
         val calculatedDiscount = couponValidation.discountAmount
 
         // Garantir que o desconto não seja maior que o total (deixando pelo menos R$ 0,01)
@@ -212,29 +210,35 @@ class CardCheckoutService(
         return Pair(finalTotal, limitedDiscount)
     }
 
-    private fun createOrderTx(request: CardCheckoutRequest, totalAmount: BigDecimal, discountAmount: BigDecimal, couponCode: String?, txid: String): Order {
+    private fun createOrderTx(
+        request: CardCheckoutRequest,
+        totalAmount: BigDecimal,
+        discountAmount: BigDecimal,
+        couponCode: String?,
+        txid: String
+    ): Order {
         val order = Order(
             firstName = request.firstName,
-            lastName  = request.lastName,
-            email     = request.email,
-            cpf       = request.cpf,
-            number    = request.number,
-            complement= request.complement,
-            district  = request.district,
-            address   = request.address,
-            city      = request.city,
-            state     = request.state,
-            cep       = request.cep,
-            phone     = request.phone,
-            note      = request.note,
-            total     = totalAmount,
-            shipping  = request.shipping.toBigDecimal(),
+            lastName = request.lastName,
+            email = request.email,
+            cpf = request.cpf,
+            number = request.number,
+            complement = request.complement,
+            district = request.district,
+            address = request.address,
+            city = request.city,
+            state = request.state,
+            cep = request.cep,
+            phone = request.phone,
+            note = request.note,
+            total = totalAmount,
+            shipping = request.shipping.toBigDecimal(),
             couponCode = couponCode,
             discountAmount = if (discountAmount > BigDecimal.ZERO) discountAmount else null,
-            paid      = false,
-            txid      = txid,
-            items     = mutableListOf(),
-            status    = OrderStatus.NEW
+            paid = false,
+            txid = txid,
+            items = mutableListOf(),
+            status = OrderStatus.NEW
         )
 
         order.items = request.cartItems.map {
@@ -249,7 +253,7 @@ class CardCheckoutService(
         }.toMutableList()
 
         val saved = orderRepository.save(order)
-        
+
         // Salvar cupom aplicado se houver
         if (couponCode != null && discountAmount > BigDecimal.ZERO) {
             val coupon = couponService.getCouponByCode(couponCode)
@@ -265,7 +269,7 @@ class CardCheckoutService(
                 log.info("Cupom aplicado: orderId={}, couponCode={}, discount={}", saved.id, couponCode, discountAmount)
             }
         }
-        
+
         log.info("CARD-TX1: order salvo id={}, txid={}", saved.id, txid)
         return saved
     }
@@ -294,11 +298,12 @@ class CardCheckoutService(
     /**
      * Helper class to distribute discount across items and shipping so that
      * the sum of adjusted values matches the finalTotal exactly in cents.
-     * 
-     * Strategy (Option A - Simple):
-     * 1. First try to apply entire discount to shipping
-     * 2. If discount <= shipping, reduce shipping only
-     * 3. If discount > shipping, reduce shipping to 0 and distribute remaining discount proportionally among items
+     *
+     * Strategy:
+     * 1. Calcula total original em centavos
+     * 2. Calcula total alvo (finalTotal) em centavos
+     * 3. Diferença = desconto efetivo a distribuir
+     * 4. Aplica no frete até zerar, depois distribui proporcionalmente nos itens
      */
     private object DiscountDistributionHelper {
         data class DistributionResult(
@@ -313,13 +318,10 @@ class CardCheckoutService(
             finalTotal: BigDecimal,
             logger: Logger
         ): DistributionResult {
-            // CORREÇÃO: Usar finalTotal como fonte da verdade (convertido para centavos)
-            // Isso garante que a soma final dos itens + frete seja exatamente igual ao total enviado para a Efí
             val targetCents = finalTotal.setScale(2, RoundingMode.HALF_UP)
                 .multiply(BigDecimal(100))
                 .toInt()
 
-            // Convert original values to cents
             val itemsWithCents = cartItems.map { item ->
                 val unitPriceCents = item.price.toBigDecimal()
                     .setScale(2, RoundingMode.HALF_UP)
@@ -347,12 +349,18 @@ class CardCheckoutService(
             logger.info("  - Total original (cents): {}", originalCentsTotal)
             logger.info("  - Desconto (cents): {}", discountCents)
             logger.info("  - Total alvo (finalTotal em cents): {}", targetCents)
-            logger.info("  - Diferença calculada vs finalTotal: {} cents", (originalCentsTotal - discountCents) - targetCents)
+            logger.info(
+                "  - Diferença calculada vs finalTotal: {} cents",
+                (originalCentsTotal - discountCents) - targetCents
+            )
 
-            // If no discount, validate that original total matches target
             if (discountCents <= 0) {
                 if (originalCentsTotal != targetCents) {
-                    logger.warn("⚠️ Sem desconto, mas originalCentsTotal ({}) != targetCents ({}). Ajustando...", originalCentsTotal, targetCents)
+                    logger.warn(
+                        "⚠️ Sem desconto, mas originalCentsTotal ({}) != targetCents ({}). Ajustando...",
+                        originalCentsTotal,
+                        targetCents
+                    )
                 }
                 return DistributionResult(
                     itemsForEfi = itemsWithCents.map { item ->
@@ -366,34 +374,34 @@ class CardCheckoutService(
                 )
             }
 
-            // CORREÇÃO: Calcular o desconto necessário para chegar exatamente ao targetCents
-            // A diferença entre originalCentsTotal e targetCents é o desconto total a aplicar
             val totalDiscountToApply = originalCentsTotal - targetCents
 
-            // Strategy: Apply discount to shipping first, then to items if needed
-            val (adjustedShippingCents, remainingDiscountCents) = if (totalDiscountToApply <= shippingCents) {
-                // Discount fits entirely in shipping
-                Pair(shippingCents - totalDiscountToApply, 0)
-            } else {
-                // Discount exceeds shipping, reduce shipping to 0
-                Pair(0, totalDiscountToApply - shippingCents)
-            }
-
-            // Distribute remaining discount proportionally among items
-            val adjustedItems = if (remainingDiscountCents > 0) {
-                distributeDiscountAmongItems(itemsWithCents, remainingDiscountCents, targetCents, adjustedShippingCents, logger)
-            } else {
-                // No discount on items, keep original values
-                itemsWithCents.map { item ->
-                    AdjustedItem(
-                        dto = item.dto,
-                        adjustedUnitPriceCents = item.unitPriceCents,
-                        adjustedLineTotalCents = item.lineTotalCents
-                    )
+            val (adjustedShippingCents, remainingDiscountCents) =
+                if (totalDiscountToApply <= shippingCents) {
+                    Pair(shippingCents - totalDiscountToApply, 0)
+                } else {
+                    Pair(0, totalDiscountToApply - shippingCents)
                 }
-            }
 
-            // Build final items for Efí
+            val adjustedItems =
+                if (remainingDiscountCents > 0) {
+                    distributeDiscountAmongItems(
+                        itemsWithCents,
+                        remainingDiscountCents,
+                        targetCents,
+                        adjustedShippingCents,
+                        logger
+                    )
+                } else {
+                    itemsWithCents.map { item ->
+                        AdjustedItem(
+                            dto = item.dto,
+                            adjustedUnitPriceCents = item.unitPriceCents,
+                            adjustedLineTotalCents = item.lineTotalCents
+                        )
+                    }
+                }
+
             val itemsForEfi = adjustedItems.map { item ->
                 mapOf(
                     "name" to item.dto.title,
@@ -402,12 +410,19 @@ class CardCheckoutService(
                 )
             }
 
-            val finalSumCents = adjustedItems.sumOf { it.adjustedLineTotalCents } + adjustedShippingCents
+            val finalSumCents =
+                adjustedItems.sumOf { it.adjustedLineTotalCents } + adjustedShippingCents
 
             logger.info("💰 DISTRIBUIÇÃO FINAL:")
             logger.info("  - Frete ajustado (cents): {}", adjustedShippingCents)
             adjustedItems.forEachIndexed { index, item ->
-                logger.info("  - Item {}: {} x {} = {} cents", index + 1, item.adjustedUnitPriceCents, item.dto.quantity, item.adjustedLineTotalCents)
+                logger.info(
+                    "  - Item {}: {} x {} = {} cents",
+                    index + 1,
+                    item.adjustedUnitPriceCents,
+                    item.dto.quantity,
+                    item.adjustedLineTotalCents
+                )
             }
             logger.info("  - Soma final (cents): {}", finalSumCents)
             logger.info("  - Total alvo (cents): {}", targetCents)
@@ -431,12 +446,6 @@ class CardCheckoutService(
             val adjustedLineTotalCents: Int
         )
 
-        /**
-         * Distributes discount proportionally among items, ensuring:
-         * - No line goes negative
-         * - Integer cents are properly handled
-         * - Total sum (items + shipping) matches targetCents exactly
-         */
         private fun distributeDiscountAmongItems(
             items: List<ItemWithCents>,
             remainingDiscountCents: Int,
@@ -444,15 +453,11 @@ class CardCheckoutService(
             adjustedShippingCents: Int,
             logger: Logger
         ): List<AdjustedItem> {
-            if (items.isEmpty()) {
-                return emptyList()
-            }
+            if (items.isEmpty()) return emptyList()
 
             val itemsTotalCents = items.sumOf { it.lineTotalCents }
-            // CORREÇÃO: Calcular targetItemsSumCents baseado no targetCents total (não no desconto restante)
-            // Isso garante que items + shipping = targetCents exatamente
             val targetItemsSumCents = targetCents - adjustedShippingCents
-            
+
             if (itemsTotalCents <= 0 || targetItemsSumCents < 0) {
                 logger.warn("⚠️ Total de itens é zero ou desconto excede total, não é possível distribuir desconto")
                 return items.map { item ->
@@ -464,35 +469,29 @@ class CardCheckoutService(
                 }
             }
 
-            // Calculate proportional discount per item (using floor to avoid over-discounting)
             val discountsPerItem = mutableListOf<Int>()
             var totalDiscountApplied = 0
 
-            items.forEachIndexed { index, item ->
-                val proportionalDiscount = if (itemsTotalCents > 0) {
-                    (item.lineTotalCents.toBigDecimal() * remainingDiscountCents.toBigDecimal())
-                        .divide(itemsTotalCents.toBigDecimal(), 0, RoundingMode.FLOOR)
-                        .toInt()
-                        .coerceAtMost(item.lineTotalCents)
-                } else {
-                    0
-                }
+            items.forEach { item ->
+                val proportionalDiscount =
+                    if (itemsTotalCents > 0) {
+                        (item.lineTotalCents.toBigDecimal() * remainingDiscountCents.toBigDecimal())
+                            .divide(itemsTotalCents.toBigDecimal(), 0, RoundingMode.FLOOR)
+                            .toInt()
+                            .coerceAtMost(item.lineTotalCents)
+                    } else {
+                        0
+                    }
                 discountsPerItem.add(proportionalDiscount)
                 totalDiscountApplied += proportionalDiscount
             }
 
-            // Distribute remaining cents (due to rounding) to ensure exact match
             var remainingToDistribute = remainingDiscountCents - totalDiscountApplied
             if (remainingToDistribute > 0) {
-                // Distribute to items with capacity, starting from largest remaining capacity
                 val itemsWithCapacity = items.mapIndexedNotNull { index, item ->
                     val discountApplied = discountsPerItem[index]
                     val remainingCapacity = item.lineTotalCents - discountApplied
-                    if (remainingCapacity > 0) {
-                        index to remainingCapacity
-                    } else {
-                        null
-                    }
+                    if (remainingCapacity > 0) index to remainingCapacity else null
                 }.sortedByDescending { it.second }
 
                 itemsWithCapacity.forEach { (index, _) ->
@@ -503,18 +502,17 @@ class CardCheckoutService(
                 }
             }
 
-            // Build adjusted items with exact line totals
             val adjustedItems = items.mapIndexed { index, item ->
                 val discountApplied = discountsPerItem[index]
                 val adjustedLineTotalCents = (item.lineTotalCents - discountApplied).coerceAtLeast(1)
-                
-                // Calculate unit price from adjusted line total
-                val adjustedUnitPriceCents = if (item.dto.quantity > 0) {
-                    (adjustedLineTotalCents / item.dto.quantity).coerceAtLeast(1)
-                } else {
-                    item.unitPriceCents
-                }
-                
+
+                val adjustedUnitPriceCents =
+                    if (item.dto.quantity > 0) {
+                        (adjustedLineTotalCents / item.dto.quantity).coerceAtLeast(1)
+                    } else {
+                        item.unitPriceCents
+                    }
+
                 AdjustedItem(
                     dto = item.dto,
                     adjustedUnitPriceCents = adjustedUnitPriceCents,
@@ -522,54 +520,66 @@ class CardCheckoutService(
                 )
             }
 
-            // CORREÇÃO: Ensure exact match by adjusting items so that (items + shipping) = targetCents
             val currentItemsSum = adjustedItems.sumOf { it.adjustedLineTotalCents }
             val currentTotalSum = currentItemsSum + adjustedShippingCents
             val difference = targetCents - currentTotalSum
 
             if (difference != 0 && adjustedItems.isNotEmpty()) {
-                logger.info("🔧 Ajustando diferença de {} centavos para bater exatamente com targetCents", difference)
+                logger.info(
+                    "🔧 Ajustando diferença de {} centavos para bater exatamente com targetCents",
+                    difference
+                )
                 val lastIndex = adjustedItems.size - 1
                 val lastItem = adjustedItems[lastIndex]
                 val originalItem = items[lastIndex]
-                
-                // Ajustar o último item para que a soma total seja exatamente targetCents
+
                 val newLineTotal = (lastItem.adjustedLineTotalCents + difference).coerceIn(
                     1,
                     originalItem.lineTotalCents
                 )
-                val newUnitPrice = if (lastItem.dto.quantity > 0) {
-                    (newLineTotal / lastItem.dto.quantity).coerceAtLeast(1)
-                } else {
-                    lastItem.adjustedUnitPriceCents
-                }
-                
+                val newUnitPrice =
+                    if (lastItem.dto.quantity > 0) {
+                        (newLineTotal / lastItem.dto.quantity).coerceAtLeast(1)
+                    } else {
+                        lastItem.adjustedUnitPriceCents
+                    }
+
                 val finalAdjustedItems = adjustedItems.dropLast(1) + AdjustedItem(
                     dto = lastItem.dto,
                     adjustedUnitPriceCents = newUnitPrice,
                     adjustedLineTotalCents = newLineTotal
                 )
-                
-                // Validação final
+
                 val finalItemsSum = finalAdjustedItems.sumOf { it.adjustedLineTotalCents }
                 val finalTotalSum = finalItemsSum + adjustedShippingCents
                 if (finalTotalSum != targetCents) {
-                    logger.warn("⚠️ Após ajuste, soma final ({}) ainda difere de targetCents ({}). Diferença: {}", 
-                        finalTotalSum, targetCents, finalTotalSum - targetCents)
+                    logger.warn(
+                        "⚠️ Após ajuste, soma final ({}) ainda difere de targetCents ({}). Diferença: {}",
+                        finalTotalSum,
+                        targetCents,
+                        finalTotalSum - targetCents
+                    )
                 } else {
-                    logger.info("✅ Soma final ajustada corretamente: {} (items) + {} (shipping) = {} (target)", 
-                        finalItemsSum, adjustedShippingCents, targetCents)
+                    logger.info(
+                        "✅ Soma final ajustada corretamente: {} (items) + {} (shipping) = {} (target)",
+                        finalItemsSum,
+                        adjustedShippingCents,
+                        targetCents
+                    )
                 }
-                
+
                 return finalAdjustedItems
             }
 
-            // Validação final mesmo quando não há ajuste
             val finalItemsSum = adjustedItems.sumOf { it.adjustedLineTotalCents }
             val finalTotalSum = finalItemsSum + adjustedShippingCents
             if (finalTotalSum != targetCents) {
-                logger.warn("⚠️ Soma final ({}) difere de targetCents ({}). Diferença: {}", 
-                    finalTotalSum, targetCents, finalTotalSum - targetCents)
+                logger.warn(
+                    "⚠️ Soma final ({}) difere de targetCents ({}). Diferença: {}",
+                    finalTotalSum,
+                    targetCents,
+                    finalTotalSum - targetCents
+                )
             }
 
             return adjustedItems

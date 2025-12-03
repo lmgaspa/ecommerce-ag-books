@@ -1,6 +1,7 @@
 package com.luizgasparetto.backend.monolito.web
 
 import com.luizgasparetto.backend.monolito.exceptions.ReservationConflictException
+import com.luizgasparetto.backend.monolito.exceptions.PaymentGatewayException
 import jakarta.servlet.http.HttpServletRequest
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
@@ -39,12 +40,31 @@ class ApiExceptionHandler {
             .body(ApiError(code = "OUT_OF_STOCK", message = ex.message ?: "Indisponível"))
     }
 
+    /**
+     * Falha ao comunicar com gateway de pagamento (Efí).
+     * Ex.: 401 sandbox, timeout, 5xx, etc.
+     */
+    @ExceptionHandler(PaymentGatewayException::class)
+    fun handlePaymentGateway(ex: PaymentGatewayException): ResponseEntity<ApiError> {
+        log.warn(
+            "Erro ao comunicar com gateway de pagamento: {} (gatewayCode={})",
+            ex.message,
+            ex.gatewayCode
+        )
+        return ResponseEntity
+            .status(HttpStatus.BAD_GATEWAY) // 502 – erro em serviço externo
+            .body(
+                ApiError(
+                    code = "PAYMENT_GATEWAY_ERROR",
+                    message = ex.message
+                )
+            )
+    }
+
     // Cliente encerrou a conexão / stream (SSE). Não tentar escrever body.
     @ExceptionHandler(
         org.springframework.web.context.request.async.AsyncRequestNotUsableException::class,
-        java.io.IOException::class, // broken pipe
-        // Se estiver usando Tomcat (embed), essa classe pode não estar no classpath em runtime;
-        // se não estiver, essa assinatura é ignorada.
+        java.io.IOException::class,
         org.apache.catalina.connector.ClientAbortException::class
     )
     fun handleClientGone(@Suppress("UNUSED_PARAMETER") ex: Exception): ResponseEntity<Void> {
@@ -54,7 +74,6 @@ class ApiExceptionHandler {
 
     @ExceptionHandler(Exception::class)
     fun handleGeneric(ex: Exception, request: HttpServletRequest): ResponseEntity<Any> {
-        // Se for um request de SSE, não escreva JSON (evita HttpMessageNotWritableException)
         val accept = (request.getHeader("Accept") ?: "").lowercase()
         if (accept.contains("text/event-stream")) {
             log.info("Erro em endpoint SSE, retornando 204 sem body: {}", ex.javaClass.simpleName)

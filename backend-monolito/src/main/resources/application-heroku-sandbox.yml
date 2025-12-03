@@ -14,7 +14,6 @@ spring:
       SITE_AUTHOR_PIX_KEY: ${SITE_AUTHOR_PIX_KEY:29322022000}
 
   datasource:
-    # Você pode usar o MESMO banco ou outro DATABASE_URL só de sandbox.
     url: ${JDBC_DATABASE_URL:${DATABASE_URL}}
     username: ${JDBC_DATABASE_USERNAME:${DB_USERNAME}}
     password: ${JDBC_DATABASE_PASSWORD:${DB_PASSWORD}}
@@ -104,7 +103,6 @@ springdoc:
   swagger-ui:
     enabled: false
 
-# App settings
 app:
   privacy:
     cookie-sign-secret: ${COOKIE_SIGN_SECRET}
@@ -117,16 +115,16 @@ checkout:
 
 efi:
   pix:
-    # 🔒 SANDBOX: usa variáveis específicas de sandbox
+    # PIX em sandbox: usa as variáveis SANDBOX
     client-id: ${EFI_SANDBOX_PIX_CLIENT_ID}
     client-secret: ${EFI_SANDBOX_PIX_CLIENT_SECRET}
     chave: ${EFI_SANDBOX_PIX_KEY}
-    # certificado de homologação:
     cert-path: classpath:homologacao-ec-agenor.p12
     cert-password: ""
     sandbox: true
 
   card:
+    # CARTÃO em sandbox: usa as variáveis SANDBOX
     client-id: ${EFI_SANDBOX_CARD_CLIENT_ID}
     client-secret: ${EFI_SANDBOX_CARD_CLIENT_SECRET}
     sandbox: true
