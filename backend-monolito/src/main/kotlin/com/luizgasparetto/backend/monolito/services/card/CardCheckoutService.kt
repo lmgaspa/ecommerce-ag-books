@@ -313,6 +313,12 @@ class CardCheckoutService(
             finalTotal: BigDecimal,
             logger: Logger
         ): DistributionResult {
+            // CORREÇÃO: Usar finalTotal como fonte da verdade (convertido para centavos)
+            // Isso garante que a soma final dos itens + frete seja exatamente igual ao total enviado para a Efí
+            val targetCents = finalTotal.setScale(2, RoundingMode.HALF_UP)
+                .multiply(BigDecimal(100))
+                .toInt()
+
             // Convert original values to cents
             val itemsWithCents = cartItems.map { item ->
                 val unitPriceCents = item.price.toBigDecimal()
@@ -336,15 +342,18 @@ class CardCheckoutService(
             val discountCents = discountAmount.setScale(2, RoundingMode.HALF_UP)
                 .multiply(BigDecimal(100))
                 .toInt()
-            val targetCents = originalCentsTotal - discountCents
 
             logger.info("💰 DISTRIBUIÇÃO DE DESCONTO:")
             logger.info("  - Total original (cents): {}", originalCentsTotal)
             logger.info("  - Desconto (cents): {}", discountCents)
-            logger.info("  - Total alvo (cents): {}", targetCents)
+            logger.info("  - Total alvo (finalTotal em cents): {}", targetCents)
+            logger.info("  - Diferença calculada vs finalTotal: {} cents", (originalCentsTotal - discountCents) - targetCents)
 
-            // If no discount, return original values
+            // If no discount, validate that original total matches target
             if (discountCents <= 0) {
+                if (originalCentsTotal != targetCents) {
+                    logger.warn("⚠️ Sem desconto, mas originalCentsTotal ({}) != targetCents ({}). Ajustando...", originalCentsTotal, targetCents)
+                }
                 return DistributionResult(
                     itemsForEfi = itemsWithCents.map { item ->
                         mapOf(
@@ -357,18 +366,22 @@ class CardCheckoutService(
                 )
             }
 
+            // CORREÇÃO: Calcular o desconto necessário para chegar exatamente ao targetCents
+            // A diferença entre originalCentsTotal e targetCents é o desconto total a aplicar
+            val totalDiscountToApply = originalCentsTotal - targetCents
+
             // Strategy: Apply discount to shipping first, then to items if needed
-            val (adjustedShippingCents, remainingDiscountCents) = if (discountCents <= shippingCents) {
+            val (adjustedShippingCents, remainingDiscountCents) = if (totalDiscountToApply <= shippingCents) {
                 // Discount fits entirely in shipping
-                Pair(shippingCents - discountCents, 0)
+                Pair(shippingCents - totalDiscountToApply, 0)
             } else {
                 // Discount exceeds shipping, reduce shipping to 0
-                Pair(0, discountCents - shippingCents)
+                Pair(0, totalDiscountToApply - shippingCents)
             }
 
             // Distribute remaining discount proportionally among items
             val adjustedItems = if (remainingDiscountCents > 0) {
-                distributeDiscountAmongItems(itemsWithCents, remainingDiscountCents, logger)
+                distributeDiscountAmongItems(itemsWithCents, remainingDiscountCents, targetCents, adjustedShippingCents, logger)
             } else {
                 // No discount on items, keep original values
                 itemsWithCents.map { item ->
@@ -422,11 +435,13 @@ class CardCheckoutService(
          * Distributes discount proportionally among items, ensuring:
          * - No line goes negative
          * - Integer cents are properly handled
-         * - Total discount matches remainingDiscountCents exactly
+         * - Total sum (items + shipping) matches targetCents exactly
          */
         private fun distributeDiscountAmongItems(
             items: List<ItemWithCents>,
             remainingDiscountCents: Int,
+            targetCents: Int,
+            adjustedShippingCents: Int,
             logger: Logger
         ): List<AdjustedItem> {
             if (items.isEmpty()) {
@@ -434,7 +449,9 @@ class CardCheckoutService(
             }
 
             val itemsTotalCents = items.sumOf { it.lineTotalCents }
-            val targetItemsSumCents = itemsTotalCents - remainingDiscountCents
+            // CORREÇÃO: Calcular targetItemsSumCents baseado no targetCents total (não no desconto restante)
+            // Isso garante que items + shipping = targetCents exatamente
+            val targetItemsSumCents = targetCents - adjustedShippingCents
             
             if (itemsTotalCents <= 0 || targetItemsSumCents < 0) {
                 logger.warn("⚠️ Total de itens é zero ou desconto excede total, não é possível distribuir desconto")
@@ -505,15 +522,18 @@ class CardCheckoutService(
                 )
             }
 
-            // Ensure exact match by adjusting the last item if needed
-            val currentSum = adjustedItems.sumOf { it.adjustedLineTotalCents }
-            val difference = targetItemsSumCents - currentSum
+            // CORREÇÃO: Ensure exact match by adjusting items so that (items + shipping) = targetCents
+            val currentItemsSum = adjustedItems.sumOf { it.adjustedLineTotalCents }
+            val currentTotalSum = currentItemsSum + adjustedShippingCents
+            val difference = targetCents - currentTotalSum
 
             if (difference != 0 && adjustedItems.isNotEmpty()) {
+                logger.info("🔧 Ajustando diferença de {} centavos para bater exatamente com targetCents", difference)
                 val lastIndex = adjustedItems.size - 1
                 val lastItem = adjustedItems[lastIndex]
                 val originalItem = items[lastIndex]
                 
+                // Ajustar o último item para que a soma total seja exatamente targetCents
                 val newLineTotal = (lastItem.adjustedLineTotalCents + difference).coerceIn(
                     1,
                     originalItem.lineTotalCents
@@ -524,11 +544,32 @@ class CardCheckoutService(
                     lastItem.adjustedUnitPriceCents
                 }
                 
-                return adjustedItems.dropLast(1) + AdjustedItem(
+                val finalAdjustedItems = adjustedItems.dropLast(1) + AdjustedItem(
                     dto = lastItem.dto,
                     adjustedUnitPriceCents = newUnitPrice,
                     adjustedLineTotalCents = newLineTotal
                 )
+                
+                // Validação final
+                val finalItemsSum = finalAdjustedItems.sumOf { it.adjustedLineTotalCents }
+                val finalTotalSum = finalItemsSum + adjustedShippingCents
+                if (finalTotalSum != targetCents) {
+                    logger.warn("⚠️ Após ajuste, soma final ({}) ainda difere de targetCents ({}). Diferença: {}", 
+                        finalTotalSum, targetCents, finalTotalSum - targetCents)
+                } else {
+                    logger.info("✅ Soma final ajustada corretamente: {} (items) + {} (shipping) = {} (target)", 
+                        finalItemsSum, adjustedShippingCents, targetCents)
+                }
+                
+                return finalAdjustedItems
+            }
+
+            // Validação final mesmo quando não há ajuste
+            val finalItemsSum = adjustedItems.sumOf { it.adjustedLineTotalCents }
+            val finalTotalSum = finalItemsSum + adjustedShippingCents
+            if (finalTotalSum != targetCents) {
+                logger.warn("⚠️ Soma final ({}) difere de targetCents ({}). Diferença: {}", 
+                    finalTotalSum, targetCents, finalTotalSum - targetCents)
             }
 
             return adjustedItems
