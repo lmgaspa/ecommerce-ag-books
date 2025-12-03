@@ -21,7 +21,6 @@ import type { CartItem } from "../context/CartTypes";
 import type { CheckoutFormData } from "../types/CheckoutTypes";
 import { CartContext } from "../context/CartContext";
 import { OrderSummary } from "../components/OrderSummary";
-import ReviewPurchaseButton from "../components/common/ReviewPurchaseButton";
 
 /* ===================== Local types & helpers ===================== */
 
@@ -575,9 +574,6 @@ export default function CardPaymentPage() {
         discount={desconto}
         total={total}
       />
-
-      {/* 🔁 Botão global reutilizável */}
-      <ReviewPurchaseButton />
 
       {/* 🎯 INDICADOR VISUAL DO CUPOM - SEMPRE MOSTRA SE HOUVER DESCONTO */}
       {desconto > 0 ? (
