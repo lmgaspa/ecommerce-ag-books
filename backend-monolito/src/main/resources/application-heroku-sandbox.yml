@@ -1,0 +1,191 @@
+spring:
+  config:
+    activate:
+      on-profile: heroku-sandbox
+
+  flyway:
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+    validate-on-migrate: true
+    repair-on-migrate: true
+    placeholders:
+      SITE_AUTHOR_NAME: ${SITE_AUTHOR_NAME:Agenor Gasparetto}
+      SITE_AUTHOR_EMAIL: ${SITE_AUTHOR_EMAIL:ag1957@gmail.com}
+      SITE_AUTHOR_PIX_KEY: ${SITE_AUTHOR_PIX_KEY:29322022000}
+
+  datasource:
+    # Você pode usar o MESMO banco ou outro DATABASE_URL só de sandbox.
+    url: ${JDBC_DATABASE_URL:${DATABASE_URL}}
+    username: ${JDBC_DATABASE_USERNAME:${DB_USERNAME}}
+    password: ${JDBC_DATABASE_PASSWORD:${DB_PASSWORD}}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 5
+      minimum-idle: 2
+      idle-timeout: 30000
+      connection-timeout: 20000
+      max-lifetime: 1800000
+      data-source-properties:
+        sslmode: require
+
+  jpa:
+    open-in-view: false
+    show-sql: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        format_sql: true
+        jdbc.time_zone: UTC
+        hibernate.type.json_format_mapper: jackson
+
+  http:
+    client:
+      factory: jdk
+
+  mail:
+    host: ${MAIL_HOST}
+    port: ${MAIL_PORT}
+    username: ${MAIL_USERNAME}
+    password: ${MAIL_PASSWORD}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+            required: true
+
+idle:
+  mode:
+    enabled: ${IDLE_MODE:true}
+    wake-on-first-request: ${IDLE_WAKE_ON_FIRST_REQUEST:true}
+    timeout-minutes: ${IDLE_TIMEOUT_MINUTES:20}
+
+logging:
+  level:
+    root: info
+    jobs: WARN
+    org.hibernate: warn
+    org.hibernate.orm.connections.pooling: warn
+    com.zaxxer.hikari: warn
+    com.luizgasparetto.backend.monolito: info
+    org.springframework.mail: DEBUG
+    org.springframework.mail.javamail: DEBUG
+    javax.mail: DEBUG
+    com.luizgasparetto.backend.monolito.services.payout.card: DEBUG
+  group:
+    jobs: com.luizgasparetto.backend.monolito.jobs,com.luizgasparetto.backend.monolito.services.pix,com.luizgasparetto.backend.monolito.services.card
+
+server:
+  port: ${PORT:${SERVER_PORT:8080}}
+  shutdown: graceful
+  compression:
+    enabled: true
+    mime-types: application/json, text/html, text/plain
+  forward-headers-strategy: framework
+  error:
+    include-message: always
+    include-binding-errors: always
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
+
+# App settings
+app:
+  privacy:
+    cookie-sign-secret: ${COOKIE_SIGN_SECRET}
+    ip-salt: ${COOKIE_IP_SALT}
+
+checkout:
+  reserve:
+    ttl-seconds: ${CHECKOUT_RESERVE_TTL_SECONDS:300}
+    reaper-ms: ${CHECKOUT_RESERVE_REAPER_MS:60000}
+
+efi:
+  pix:
+    # 🔒 SANDBOX: usa variáveis específicas de sandbox
+    client-id: ${EFI_SANDBOX_PIX_CLIENT_ID}
+    client-secret: ${EFI_SANDBOX_PIX_CLIENT_SECRET}
+    chave: ${EFI_SANDBOX_PIX_KEY}
+    # certificado de homologação:
+    cert-path: classpath:homologacao-ec-agenor.p12
+    cert-password: ""
+    sandbox: true
+
+  card:
+    client-id: ${EFI_SANDBOX_CARD_CLIENT_ID}
+    client-secret: ${EFI_SANDBOX_CARD_CLIENT_SECRET}
+    sandbox: true
+    payout:
+      favored-key: ${EFI_PAYOUT_FAVORED_KEY:}
+      fee-percent: ${EFI_PAYOUT_FEE_PERCENT:1.59}
+      fee-fixed: ${EFI_PAYOUT_FEE_FIXED:0.49}
+      margin-percent: ${EFI_PAYOUT_MARGIN_PERCENT:0.8}
+      margin-fixed: ${EFI_PAYOUT_MARGIN_FIXED:0}
+      min-send: ${EFI_PAYOUT_MIN_SEND:1.20}
+      fees:
+        includeGatewayFees: true
+      delay:
+        cardDays: ${EFI_PAYOUT_DELAY_CARD_DAYS:32}
+        pixMinutes: ${EFI_PAYOUT_DELAY_PIX_MINUTES:0}
+    behavior:
+      onePayoutPerAuthorPerOrder: true
+
+payout:
+  favored-key: ${EFI_PAYOUT_FAVORED_KEY:}
+  fee-percent: ${EFI_PAYOUT_FEE_PERCENT:1.59}
+  fee-fixed: ${EFI_PAYOUT_FEE_FIXED:0.49}
+  margin-percent: ${EFI_PAYOUT_MARGIN_PERCENT:0.8}
+  margin-fixed: ${EFI_PAYOUT_MARGIN_FIXED:0}
+  min-send: ${EFI_PAYOUT_MIN_SEND:1.20}
+  fees:
+    includeGatewayFees: true
+  delay:
+    cardDays: ${EFI_PAYOUT_DELAY_CARD_DAYS:32}
+    pixMinutes: ${EFI_PAYOUT_DELAY_PIX_MINUTES:0}
+  scheduler:
+    card:
+      cron: "${PAYOUT_SCHED_CARD_CRON:0 17 3 * * *}"
+      batchSize: ${PAYOUT_SCHED_CARD_BATCH:100}
+
+email:
+  author: ${EMAIL_AUTHOR}
+
+mail:
+  logo:
+    url: ${MAIL_LOGO_URL:https://www.andescoresoftware.com.br/AndesCore.jpg}
+
+bootstrap:
+  author:
+    enabled: ${BOOTSTRAP_AUTHOR_ENABLED:false}
+    name: ${BOOTSTRAP_AUTHOR_NAME:}
+    email: ${BOOTSTRAP_AUTHOR_EMAIL:}
+    mode: ${BOOTSTRAP_AUTHOR_MODE:text}
+    onlyUnmapped: ${BOOTSTRAP_AUTHOR_ONLY_UNMAPPED:true}
+    book-ids: ${BOOTSTRAP_AUTHOR_BOOK_IDS:}
+
+coupon:
+  bonus:
+    enabled: ${COUPON_BONUS_ENABLED:true}
+    code: ${COUPON_BONUS_CODE:}
+    name: ${COUPON_BONUS_NAME:}
+    description: ${COUPON_BONUS_DESCRIPTION:}
+    discount-value: ${COUPON_BONUS_DISCOUNT_VALUE:}
+    minimum-order-value: ${COUPON_BONUS_MINIMUM_ORDER_VALUE:0.00}
+    valid-from: ${COUPON_BONUS_VALID_FROM:}
+    valid-until: ${COUPON_BONUS_VALID_UNTIL:}
+    active: ${COUPON_BONUS_ACTIVE:true}
