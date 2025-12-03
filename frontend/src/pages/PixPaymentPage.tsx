@@ -18,6 +18,7 @@ import { useCoupon } from "../hooks/useCoupon";
 import { apiPost, buildApiUrl } from "../api/http";
 import { CartContext } from "../context/CartContext";
 import { OrderSummary } from "../components/OrderSummary";
+import ReviewPurchaseButton from "../components/common/ReviewPurchaseButton";
 
 function formatMMSS(totalSec: number) {
   const m = Math.floor(totalSec / 60);
@@ -435,10 +436,6 @@ export default function PixPaymentPage() {
     };
   }, [orderId, connectSSE]);
 
-  const handleReviewClick = () => {
-    navigate("/checkout");
-  };
-
   const isExpired = expiresAtMs !== null && remainingSec <= 0;
 
   return (
@@ -484,15 +481,8 @@ export default function PixPaymentPage() {
         total={totalComFrete}
       />
 
-      <div className="mt-8 flex justify-between">
-        <button
-          onClick={handleReviewClick}
-          className="bg-gray-300 hover:bg-gray-400 text-black px-4 py-2 rounded"
-        >
-          Revisar compra
-        </button>
-        <span className="text-sm text-gray-500 self-center" />
-      </div>
+      {/* 🔁 Botão global reutilizável */}
+      <ReviewPurchaseButton />
 
       {loading && (
         <p className="text-center mt-8 text-gray-600">
