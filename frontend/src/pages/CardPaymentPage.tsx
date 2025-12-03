@@ -128,7 +128,7 @@ interface CardData {
 
 export default function CardPaymentPage() {
   const navigate = useNavigate();
-  const { getDiscountAmount, couponCode } = useCoupon();
+  const { getDiscountAmount, couponCode, clearCoupon, isValid: isCouponValid } = useCoupon();
   const cartContext = useContext(CartContext);
 
   // 1ª fonte: CartContext; fallback: cookie
@@ -146,6 +146,10 @@ export default function CardPaymentPage() {
   const subtotal = cart.reduce((acc, i) => acc + i.price * i.quantity, 0);
   const desconto = getDiscountAmount(subtotal);
   const total = subtotal + shipping - desconto;
+
+  // Valida se o cupom ainda está válido para exibição visual
+  const finalCouponCode = (isCouponValid && couponCode) ? couponCode : null;
+  const finalDiscount = finalCouponCode ? desconto : 0;
 
   // Guard: if cart empty or total invalid, go back to checkout
   useEffect(() => {
@@ -410,8 +414,8 @@ export default function CardPaymentPage() {
         // backend usa total original SEM desconto para validar e aplicar cupom
         total: subtotal + shipping,
         shipping,
-        discount: desconto,
-        couponCode: couponCode || null,
+        discount: finalDiscount,
+        couponCode: finalCouponCode,
       };
 
       const data: CardCheckoutResponse = await apiPost<CardCheckoutResponse>(
@@ -427,43 +431,66 @@ export default function CardPaymentPage() {
         ? paidStatuses.includes(String(data.status).toUpperCase())
         : false;
 
-      // Se não teve sucesso ou não está pago ou não veio orderId, fica na tela
-      if (!data.success || !isPaid || !data.orderId) {
-        setErrorMsg(
-          data.message ||
-            (data.success
-              ? "Pagamento ainda não foi aprovado. Tente novamente em alguns instantes ou use outra forma de pagamento."
-              : "Não foi possível processar o pagamento. Verifique os dados e tente novamente.")
+      // Se teve sucesso e tem orderId, redireciona para PedidoConfirmado
+      // (o backend pode processar pagamentos com cupom de forma diferente e não retornar status)
+      // Só não redireciona se o status indicar explicitamente um erro (ex: "FAILED", "REJECTED")
+      const errorStatuses = ["FAILED", "REJECTED", "CANCELLED", "CANCELED"];
+      const hasErrorStatus = data.status
+        ? errorStatuses.includes(String(data.status).toUpperCase())
+        : false;
+
+      if (data.success && data.orderId && !hasErrorStatus) {
+        // ✅ A partir daqui é COMPRA CONCLUÍDA: podemos limpar o carrinho e o cupom
+        if (cartContext?.clearCart) {
+          cartContext.clearCart();
+        } else {
+          cookieStorage.remove("cart");
+        }
+
+        // Limpa o cupom após compra bem-sucedida (idempotência)
+        if (couponCode) {
+          clearCoupon();
+        }
+
+        // Snapshot para PedidoConfirmado disparar analytics.purchase
+        const purchasePayload = {
+          transaction_id: String(data.orderId),
+          value: Number(total),
+          currency: "BRL",
+          shipping: Number(shipping || 0),
+          tax: 0,
+          items: mapCartItems(cart),
+          payment_type: "credit_card",
+        };
+        sessionStorage.setItem(
+          "ga_purchase_payload",
+          JSON.stringify(purchasePayload)
+        );
+
+        // Vai para a tela de confirmação, marcada como paga
+        navigate(
+          `/pedido-confirmado?orderId=${data.orderId}&payment=card&paid=true`
         );
         return;
       }
 
-      // ✅ A partir daqui é COMPRA CONCLUÍDA: podemos limpar o carrinho
-      if (cartContext?.clearCart) {
-        cartContext.clearCart();
-      } else {
-        cookieStorage.remove("cart");
+      // Se não teve sucesso ou não veio orderId, mostra erro
+      if (!data.success || !data.orderId) {
+        setErrorMsg(
+          data.message ||
+            "Não foi possível processar o pagamento. Verifique os dados e tente novamente."
+        );
+        return;
       }
 
-      // Snapshot para PedidoConfirmado disparar analytics.purchase
-      const purchasePayload = {
-        transaction_id: String(data.orderId),
-        value: Number(total),
-        currency: "BRL",
-        shipping: Number(shipping || 0),
-        tax: 0,
-        items: mapCartItems(cart),
-        payment_type: "credit_card",
-      };
-      sessionStorage.setItem(
-        "ga_purchase_payload",
-        JSON.stringify(purchasePayload)
-      );
-
-      // Vai para a tela de confirmação, marcada como paga
-      navigate(
-        `/pedido-confirmado?orderId=${data.orderId}&payment=card&paid=true`
-      );
+      // Se tem orderId mas status não está aprovado, mostra mensagem de aguardando
+      if (data.orderId && !isPaid && data.status) {
+        setErrorMsg(
+          data.message ||
+            "Pagamento ainda não foi aprovado. Tente novamente em alguns instantes ou use outra forma de pagamento."
+        );
+        return;
+      }
     } catch (e) {
       setErrorMsg(e instanceof Error ? e.message : "Falha no pagamento.");
       console.error(e);
@@ -547,6 +574,37 @@ export default function CardPaymentPage() {
         discount={desconto}
         total={total}
       />
+
+      {/* 🎯 INDICADOR VISUAL DO CUPOM - SEMPRE MOSTRA SE HOUVER DESCONTO */}
+      {desconto > 0 ? (
+        <div className="bg-green-50 border-2 border-green-500 rounded-lg p-4 mb-4 animate-pulse">
+          <div className="flex items-center gap-2">
+            <span className="text-2xl">✅</span>
+            <div>
+              <p className="font-bold text-green-800">
+                {couponCode ? `Cupom Aplicado: ${couponCode}` : "Desconto Aplicado"}
+              </p>
+              <p className="text-sm text-green-700">
+                Desconto de R$ {desconto.toFixed(2).replace(".", ",")} aplicado com sucesso!
+              </p>
+            </div>
+          </div>
+        </div>
+      ) : couponCode ? (
+        <div className="bg-yellow-50 border-2 border-yellow-500 rounded-lg p-4 mb-4">
+          <div className="flex items-center gap-2">
+            <span className="text-2xl">⚠️</span>
+            <div>
+              <p className="font-bold text-yellow-800">
+                Cupom não será aplicado
+              </p>
+              <p className="text-sm text-yellow-700">
+                O cupom "{couponCode}" não está válido ou expirou. O pagamento será processado sem desconto.
+              </p>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <label className="block text-sm font-medium mb-1">Bandeira</label>
       <select

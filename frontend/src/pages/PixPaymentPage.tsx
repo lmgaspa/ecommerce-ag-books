@@ -90,7 +90,7 @@ const SecurityWarning = ({
 
 export default function PixPaymentPage() {
   const navigate = useNavigate();
-  const { getDiscountAmount, couponCode } = useCoupon();
+  const { getDiscountAmount, couponCode, clearCoupon, isValid: isCouponValid } = useCoupon();
   const cartContext = useContext(CartContext);
 
   // Fonte de verdade do carrinho:
@@ -203,6 +203,10 @@ export default function PixPaymentPage() {
       setLoading(true);
       setErrorMsg(null);
       try {
+        // Valida se o cupom ainda está válido antes de enviar
+        const finalCouponCode = (isCouponValid && couponCode) ? couponCode : null;
+        const finalDiscount = finalCouponCode ? desconto : 0;
+
         const payload = {
           firstName: form.firstName,
           lastName: form.lastName,
@@ -222,8 +226,8 @@ export default function PixPaymentPage() {
           shipping: frete,
           cartItems,
           total: totalProdutos + (frete ?? 0), // Total original SEM desconto
-          discount: desconto,
-          couponCode: couponCode || null,
+          discount: finalDiscount,
+          couponCode: finalCouponCode,
         };
 
         const data: PixCheckoutResponse = await apiPost<PixCheckoutResponse>(
@@ -375,13 +379,18 @@ export default function PixPaymentPage() {
           timerRef.current = null;
         }
 
-        // 🔑 Limpeza do carrinho:
+        // 🔑 Limpeza do carrinho e do cupom:
         // - Preferimos o CartContext (clearCart), se estiver disponível.
         // - Mantemos fallback para remover o cookie diretamente, para não quebrar nada.
         if (cartContext?.clearCart) {
           cartContext.clearCart();
         } else {
           cookieStorage.remove("cart");
+        }
+
+        // Limpa o cupom após compra bem-sucedida (idempotência)
+        if (couponCode) {
+          clearCoupon();
         }
 
         const checkoutForm = cookieStorage.get<CheckoutFormData | null>(
