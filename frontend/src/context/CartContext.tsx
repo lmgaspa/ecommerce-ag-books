@@ -36,6 +36,20 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
     setCartItems((prev) => prev.filter((i) => i.id !== id));
   };
 
+  const updateQuantity = (id: string, delta: number) => {
+    setCartItems((prev) => {
+      const updated = prev
+        .map((item) => {
+          if (item.id !== id) return item;
+          const next = item.quantity + delta;
+          if (next <= 0) return null;
+          return { ...item, quantity: next };
+        })
+        .filter((item): item is CartItem => item !== null);
+      return updated;
+    });
+  };
+
   const clearCart = () => {
     // Fonte única de verdade: estado
     setCartItems([]);
@@ -52,6 +66,7 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
     addToCart,
     removeFromCart,
     clearCart,
+    updateQuantity,
   };
 
   return (

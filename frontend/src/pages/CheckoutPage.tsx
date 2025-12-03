@@ -1,7 +1,6 @@
 // src/pages/CheckoutPage.tsx
-import { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef, useContext } from "react";
 import { useNavigate } from "react-router-dom";
-import { useCart } from "../hooks/useCart";
 import { useCoupon } from "../hooks/useCoupon";
 import { formatCep, formatCpf, formatCelular } from "../utils/masks";
 import CheckoutForm from "./CheckoutForm";
@@ -10,6 +9,7 @@ import { calcularFreteComBaseEmCarrinho } from "../utils/freteUtils";
 import { getStockByIds } from "../api/stock";
 import { cookieStorage } from "../utils/cookieUtils";
 import { analytics, mapCartItems } from "../analytics";
+import { CartContext } from "../context/CartContext";
 
 type FormState = {
   firstName: string;
@@ -53,7 +53,7 @@ const DEFAULT_FORM: FormState = {
 
 const CheckoutPage = () => {
   const navigate = useNavigate();
-  const { getCart } = useCart();
+  const cartContext = useContext(CartContext);
   const { 
     applyCoupon, 
     getDiscountAmount, 
@@ -62,8 +62,6 @@ const CheckoutPage = () => {
     setInputValue,
     isValidating
   } = useCoupon();
-  const [cartItems, setCartItems] = useState<CartItem[]>([]);
-  const [totalItems, setTotalItems] = useState(0);
   const [stockById, setStockById] = useState<Record<string, number>>({});
   const [form, setForm] = useState<FormState>(() =>
     cookieStorage.get<FormState>("checkoutForm", DEFAULT_FORM)
@@ -73,49 +71,64 @@ const CheckoutPage = () => {
     return savedForm.shipping ?? 0;
   });
 
+  if (!cartContext) {
+    throw new Error("CheckoutPage must be used within a CartProvider");
+  }
+
+  const { cartItems, updateQuantity: updateQuantityContext, removeFromCart, totalPrice } = cartContext;
+  const totalItems = totalPrice;
+
   const onNavigateBack = () => navigate("/books");
 
-  const initializedRef = useRef(false);
   // GA4: controla se já disparamos o begin_checkout nesta visita.
   // Extensão de comportamento (analytics) sem alterar o fluxo principal (OCP).
   const beginCheckoutTrackedRef = useRef(false);
+  const initializedRef = useRef(false);
   
-  const initializeCart = useCallback(async () => {
-    if (initializedRef.current) return; // Evitar múltiplas inicializações
-    initializedRef.current = true;
-    
-    const cart = getCart();
-    const ids = cart.map((c) => c.id);
-    const stockMap = await getStockByIds(ids);
-    const stockDict = Object.fromEntries(
-      ids.map((id) => [id, Math.max(0, stockMap[id]?.stock ?? 0)])
-    );
-    setStockById(stockDict);
-
-    const fixed = cart
-      .map((i) => ({
-        ...i,
-        quantity: Math.min(i.quantity, Math.max(0, stockDict[i.id] ?? 0)),
-      }))
-      .filter((i) => i.quantity > 0);
-
-    const sum = fixed.reduce((acc, item) => acc + item.price * item.quantity, 0);
-
-    setCartItems(fixed);
-    setTotalItems(sum);
-    cookieStorage.set("cart", fixed);
-
-    if (
-      fixed.length !== cart.length ||
-      JSON.stringify(fixed) !== JSON.stringify(cart)
-    ) {
-      alert("Atualizamos seu carrinho de acordo com o estoque atual.");
-    }
-  }, [getCart]);
-
+  // Carrega estoque e valida carrinho ao montar
   useEffect(() => {
-    initializeCart();
-  }, [initializeCart]);
+    if (initializedRef.current || cartItems.length === 0) return;
+    initializedRef.current = true;
+
+    (async () => {
+      const ids = cartItems.map((c) => c.id);
+      const stockMap = await getStockByIds(ids);
+      const stockDict = Object.fromEntries(
+        ids.map((id) => [id, Math.max(0, stockMap[id]?.stock ?? 0)])
+      );
+      setStockById(stockDict);
+
+      // Valida e ajusta quantidades baseado no estoque
+      const fixed = cartItems
+        .map((i) => ({
+          ...i,
+          quantity: Math.min(i.quantity, Math.max(0, stockDict[i.id] ?? 0)),
+        }))
+        .filter((i) => i.quantity > 0);
+
+      // Se houve ajustes, atualiza o contexto
+      if (
+        fixed.length !== cartItems.length ||
+        fixed.some((f, idx) => f.quantity !== cartItems[idx]?.quantity)
+      ) {
+        // Ajusta quantidades no contexto
+        fixed.forEach((item) => {
+          const current = cartItems.find((c) => c.id === item.id);
+          if (current && current.quantity !== item.quantity) {
+            const delta = item.quantity - current.quantity;
+            updateQuantityContext(item.id, delta);
+          }
+        });
+        // Remove itens que ficaram sem estoque
+        cartItems.forEach((item) => {
+          if (!fixed.find((f) => f.id === item.id)) {
+            removeFromCart(item.id);
+          }
+        });
+        alert("Atualizamos seu carrinho de acordo com o estoque atual.");
+      }
+    })();
+  }, [cartItems, updateQuantityContext, removeFromCart]);
 
   const cpfCepInfo = useMemo(() => {
     const cpf = form.cpf.replace(/\D/g, "");
@@ -232,46 +245,25 @@ const CheckoutPage = () => {
   }, [form, shipping]);
 
   const updateQuantity = useCallback((id: string, delta: number) => {
-    setCartItems(prevItems => {
-      const updated = prevItems
-        .map((item) => {
-          if (item.id !== id) return item;
-          const max = stockById[id] ?? Infinity;
-          const next = item.quantity + delta;
-          if (next > max) {
-            alert("Quantidade excede o estoque disponível.");
-            return item;
-          }
-          if (next <= 0) return null;
-          return { ...item, quantity: next };
-        })
-        .filter(Boolean) as CartItem[];
+    const max = stockById[id] ?? Infinity;
+    const currentItem = cartItems.find((i) => i.id === id);
+    if (!currentItem) return;
 
-      // Atualizar totalItems baseado nos novos items
-      const newTotal = updated.reduce((acc, it) => acc + it.price * it.quantity, 0);
-      setTotalItems(newTotal);
-      
-      // Salvar no cookie
-      cookieStorage.set("cart", updated);
-      
-      return updated;
-    });
-  }, [stockById]);
+    const next = currentItem.quantity + delta;
+    if (next > max) {
+      alert("Quantidade excede o estoque disponível.");
+      return;
+    }
+    if (next <= 0) {
+      removeFromCart(id);
+      return;
+    }
+    updateQuantityContext(id, delta);
+  }, [stockById, cartItems, updateQuantityContext, removeFromCart]);
 
   const removeItem = useCallback((id: string) => {
-    setCartItems(prevItems => {
-      const updated = prevItems.filter((i) => i.id !== id);
-      
-      // Atualizar totalItems baseado nos novos items
-      const newTotal = updated.reduce((acc, it) => acc + it.price * it.quantity, 0);
-      setTotalItems(newTotal);
-      
-      // Salvar no cookie
-      cookieStorage.set("cart", updated);
-      
-      return updated;
-    });
-  }, []);
+    removeFromCart(id);
+  }, [removeFromCart]);
 
   const handleApplyCoupon = async (): Promise<{ success: boolean; discountAmount?: number }> => {
     const result = await applyCoupon(inputValue, totalItems);

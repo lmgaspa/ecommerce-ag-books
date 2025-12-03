@@ -1,27 +1,15 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useContext, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import CartTable from "../components/cart/CartTable";
 import CouponInput from "../components/cart/CouponInput";
 import CartSummary from "../components/cart/CartSummary";
 import { getStockByIds } from "../api/stock";
-import Cookies from "js-cookie";
 import { useCoupon } from "../hooks/useCoupon";
-
-interface CartItem {
-  id: string;
-  title: string;
-  imageUrl: string;
-  price: number;
-  quantity: number;
-  stock?: number;
-}
-
-const COOKIE_NAME = "cart";
-const COOKIE_DAYS = 7;
+import { CartContext } from "../context/CartContext";
+import type { CartItem } from "../context/CartTypes";
 
 const CartPage = () => {
-  const [cartItems, setCartItems] = useState<CartItem[]>([]);
-  const [subtotal, setSubtotal] = useState(0);
+  const cartContext = useContext(CartContext);
   const [stockById, setStockById] = useState<Record<string, number>>({});
   const navigate = useNavigate();
   const { 
@@ -33,58 +21,30 @@ const CartPage = () => {
     isValidating
   } = useCoupon();
 
-  // Utilidades para manipular cookies
-  const getCartFromCookies = (): CartItem[] => {
-    try {
-      const value = Cookies.get(COOKIE_NAME);
-      return value ? JSON.parse(value) : [];
-    } catch {
-      return [];
-    }
-  };
+  if (!cartContext) {
+    throw new Error("CartPage must be used within a CartProvider");
+  }
 
-  const saveCartToCookies = (items: CartItem[]) => {
-    Cookies.set(COOKIE_NAME, JSON.stringify(items), {
-      expires: COOKIE_DAYS,
-      sameSite: "Lax",
-      secure: window.location.protocol === "https:",
-    });
-  };
+  const { cartItems, updateQuantity: updateQuantityContext, removeFromCart, totalPrice } = cartContext;
+  const subtotal = totalPrice;
 
-  const clearCartCookies = () => {
-    Cookies.remove(COOKIE_NAME);
-  };
+  const initializedRef = useRef(false);
 
-  // Carrega carrinho e sincroniza com estoque
+  // Carrega estoque e valida carrinho ao montar
   useEffect(() => {
-    const storedCart = getCartFromCookies();
-    const normalizedCart = storedCart.map((item) => {
-      const rawPrice = item.price as unknown;
-      const price =
-        typeof rawPrice === "string"
-          ? parseFloat(rawPrice.replace(/[^\d.,]/g, "").replace(",", ".")) || 0
-          : typeof rawPrice === "number"
-          ? rawPrice
-          : 0;
-      return { ...item, price, quantity: typeof item.quantity === "number" ? item.quantity : 1 };
-    });
+    if (initializedRef.current || cartItems.length === 0) return;
+    initializedRef.current = true;
 
     (async () => {
-      if (!normalizedCart.length) {
-        setCartItems([]);
-        setSubtotal(0);
-        clearCartCookies();
-        return;
-      }
-
-      const ids = normalizedCart.map((i) => i.id);
+      const ids = cartItems.map((i) => i.id);
       const stockMap = await getStockByIds(ids);
       const stockDict = Object.fromEntries(
         ids.map((id) => [id, Math.max(0, stockMap[id]?.stock ?? 0)])
       );
       setStockById(stockDict);
 
-      const fixed = normalizedCart
+      // Valida e ajusta quantidades baseado no estoque
+      const fixed = cartItems
         .map((i) => {
           const s = stockDict[i.id] ?? 0;
           const qty = Math.min(i.quantity, Math.max(0, s));
@@ -92,49 +52,49 @@ const CartPage = () => {
         })
         .filter((i) => i.quantity > 0);
 
-      setCartItems(fixed);
-      saveCartToCookies(fixed);
-      calculateSubtotal(fixed);
-
+      // Se houve ajustes, atualiza o contexto
       if (
-        fixed.length !== normalizedCart.length ||
-        JSON.stringify(fixed) !== JSON.stringify(normalizedCart)
+        fixed.length !== cartItems.length ||
+        fixed.some((f, idx) => f.quantity !== cartItems[idx]?.quantity)
       ) {
+        // Ajusta quantidades no contexto
+        fixed.forEach((item) => {
+          const current = cartItems.find((c) => c.id === item.id);
+          if (current && current.quantity !== item.quantity) {
+            const delta = item.quantity - current.quantity;
+            updateQuantityContext(item.id, delta);
+          }
+        });
+        // Remove itens que ficaram sem estoque
+        cartItems.forEach((item) => {
+          if (!fixed.find((f) => f.id === item.id)) {
+            removeFromCart(item.id);
+          }
+        });
         alert("Atualizamos seu carrinho de acordo com o estoque atual.");
       }
     })();
-  }, []);
-
-  const calculateSubtotal = (items: CartItem[]) => {
-    const total = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
-    setSubtotal(total);
-  };
+  }, [cartItems, updateQuantityContext, removeFromCart]);
 
   const updateQuantity = (itemId: string, amount: number) => {
-    const updatedItems = cartItems
-      .map((item) => {
-        if (item.id !== itemId) return item;
-        const max = stockById[item.id] ?? Infinity;
-        const next = item.quantity + amount;
-        if (amount > 0 && next > max) {
-          alert("Quantidade solicitada excede o estoque disponível.");
-          return item;
-        }
-        if (next <= 0) return null;
-        return { ...item, quantity: next };
-      })
-      .filter((item): item is CartItem => item !== null);
+    const max = stockById[itemId] ?? Infinity;
+    const currentItem = cartItems.find((i) => i.id === itemId);
+    if (!currentItem) return;
 
-    setCartItems(updatedItems);
-    saveCartToCookies(updatedItems);
-    calculateSubtotal(updatedItems);
+    const next = currentItem.quantity + amount;
+    if (amount > 0 && next > max) {
+      alert("Quantidade solicitada excede o estoque disponível.");
+      return;
+    }
+    if (next <= 0) {
+      removeFromCart(itemId);
+      return;
+    }
+    updateQuantityContext(itemId, amount);
   };
 
   const removeItem = (itemId: string) => {
-    const updatedItems = cartItems.filter((item) => item.id !== itemId);
-    setCartItems(updatedItems);
-    saveCartToCookies(updatedItems);
-    calculateSubtotal(updatedItems);
+    removeFromCart(itemId);
   };
 
   const handleApplyCoupon = async (): Promise<{ success: boolean; discountAmount?: number }> => {

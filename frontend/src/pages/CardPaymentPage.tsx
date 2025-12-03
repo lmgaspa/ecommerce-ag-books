@@ -247,6 +247,7 @@ export default function CardPaymentPage() {
   }, [numberDigits]);
 
   // Fetch installments from Efí using ENV
+  // Usa o total COM desconto para calcular as parcelas corretamente
   useEffect(() => {
     (async () => {
       try {
@@ -274,7 +275,7 @@ export default function CardPaymentPage() {
         setInstallments(1);
       }
     })();
-  }, [brand, total]);
+  }, [brand, total, desconto]);
 
   const onChangeBrand = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const newBrand = e.target.value as BrandUI;
@@ -347,8 +348,19 @@ export default function CardPaymentPage() {
   );
 
   const perInstallment = useMemo(() => {
-    if (selectedInstallment) return selectedInstallment.value / 100;
+    // Sempre usa o total atual (com desconto) para calcular o valor por parcela
+    // A API pode retornar valores baseados em um total antigo, então recalculamos
     if (installments <= 1) return total;
+    // Se temos uma opção selecionada da API, mas o total mudou, recalcula baseado no total atual
+    if (selectedInstallment) {
+      // Recalcula proporcionalmente se o total mudou
+      const apiTotal = selectedInstallment.value / 100 * installments;
+      if (Math.abs(apiTotal - total) > 0.01) {
+        // Total mudou (desconto foi aplicado), recalcula baseado no total atual
+        return Math.round((total / installments) * 100) / 100;
+      }
+      return selectedInstallment.value / 100;
+    }
     return Math.round((total / installments) * 100) / 100;
   }, [selectedInstallment, installments, total]);
 
@@ -606,12 +618,19 @@ export default function CardPaymentPage() {
         onChange={(e) => setInstallments(Number(e.target.value))}
       >
         {installmentOptions.length > 0
-          ? installmentOptions.map((opt) => (
-              <option value={opt.installment} key={opt.installment}>
-                {opt.installment}x de R$ {(opt.value / 100).toFixed(2)}{" "}
-                {opt.has_interest ? " (c/ juros)" : " (s/ juros)"}
-              </option>
-            ))
+          ? installmentOptions.map((opt) => {
+              // Recalcula o valor por parcela baseado no total atual (com desconto)
+              const apiTotal = (opt.value / 100) * opt.installment;
+              const adjustedValue = Math.abs(apiTotal - total) > 0.01 
+                ? total / opt.installment 
+                : opt.value / 100;
+              return (
+                <option value={opt.installment} key={opt.installment}>
+                  {opt.installment}x de R$ {adjustedValue.toFixed(2)}{" "}
+                  {opt.has_interest ? " (c/ juros)" : " (s/ juros)"}
+                </option>
+              );
+            })
           : [1, 2, 3, 4, 5, 6].map((n) => (
               <option value={n} key={n}>
                 {n}x
