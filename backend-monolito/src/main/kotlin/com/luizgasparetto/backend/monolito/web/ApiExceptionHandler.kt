@@ -7,6 +7,7 @@ import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.ExceptionHandler
 import org.springframework.web.bind.annotation.RestControllerAdvice
+import org.springframework.web.servlet.resource.NoResourceFoundException
 
 @RestControllerAdvice
 class ApiExceptionHandler {
@@ -16,6 +17,11 @@ class ApiExceptionHandler {
         val code: String,
         val message: String
     )
+
+    @ExceptionHandler(NoResourceFoundException::class)
+    fun handleNoResource(ex: NoResourceFoundException, request: HttpServletRequest): ResponseEntity<Void> {
+        return ResponseEntity.notFound().build()
+    }
 
     @ExceptionHandler(ReservationConflictException::class)
     fun handleReservationConflict(ex: ReservationConflictException): ResponseEntity<ApiError> {

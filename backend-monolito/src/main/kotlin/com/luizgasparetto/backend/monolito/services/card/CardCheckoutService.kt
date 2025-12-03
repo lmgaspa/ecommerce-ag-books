@@ -3,12 +3,12 @@ package com.luizgasparetto.backend.monolito.services.card
 import com.luizgasparetto.backend.monolito.dto.card.CardCartItemDto
 import com.luizgasparetto.backend.monolito.dto.card.CardCheckoutRequest
 import com.luizgasparetto.backend.monolito.dto.card.CardCheckoutResponse
+import com.luizgasparetto.backend.monolito.models.coupon.OrderCoupon
 import com.luizgasparetto.backend.monolito.models.order.Order
 import com.luizgasparetto.backend.monolito.models.order.OrderItem
 import com.luizgasparetto.backend.monolito.models.order.OrderStatus
-import com.luizgasparetto.backend.monolito.repositories.OrderRepository
 import com.luizgasparetto.backend.monolito.repositories.OrderCouponRepository
-import com.luizgasparetto.backend.monolito.models.coupon.OrderCoupon
+import com.luizgasparetto.backend.monolito.repositories.OrderRepository
 import com.luizgasparetto.backend.monolito.services.book.BookService
 import com.luizgasparetto.backend.monolito.services.coupon.CouponService
 import org.slf4j.LoggerFactory
@@ -39,11 +39,10 @@ class CardCheckoutService(
             bookService.validateStock(item.id, item.quantity)
         }
 
-        // 0.1) calcula total original (sem cupom) e processa desconto
+        // 0.1) total original (sem desconto) e processamento de cupom
         val originalTotal = calculateOriginalTotal(request.shipping, request.cartItems)
         val (finalTotal, discountAmount) = processDiscount(request, originalTotal)
 
-        // Log detalhado para debug
         log.info("💳 CHECKOUT CARD - Dados recebidos:")
         log.info("  - Total do request: {}", request.total)
         log.info("  - Shipping: {}", request.shipping)
@@ -53,7 +52,6 @@ class CardCheckoutService(
         log.info("  - Desconto aplicado: {}", discountAmount)
         log.info("  - Total final: {}", finalTotal)
 
-        // Segurança: total final nunca pode ser zero/negativo
         if (finalTotal < BigDecimal("0.01")) {
             log.error("❌ Total final muito baixo: {} - Rejeitando checkout", finalTotal)
             throw IllegalArgumentException("Valor do pedido muito baixo. Valor mínimo: R$ 0,01")
@@ -61,15 +59,14 @@ class CardCheckoutService(
 
         val txid = "CARD-" + UUID.randomUUID().toString().replace("-", "").take(30)
 
-        // 1) cria pedido base + reserva TTL
+        // 1) cria pedido + reserva de estoque
         val order = createOrderTx(request, finalTotal, discountAmount, request.couponCode, txid).also {
             it.paymentMethod = "card"
             it.installments = request.installments.coerceAtLeast(1)
         }
         reserveItemsTx(order, reserveTtlSeconds)
 
-        // 2) monta itens e cliente para Efí,
-        //    já com desconto distribuído em itens/frete
+        // 2) monta itens + frete para Efí, já com desconto distribuído nas linhas
         val (itemsForEfi, shippingCentsAdjusted) = buildEfiAmounts(
             request = request,
             originalTotal = originalTotal,
@@ -83,17 +80,17 @@ class CardCheckoutService(
             "phone_number" to request.phone.filter { it.isDigit() }.ifBlank { null }
         )
 
-        // 3) cobrança cartão (one-step) – usando `shippings` com valor já ajustado
+        // 3) cobrança cartão (one-step) com total já com desconto
         val result = try {
             cardService.createOneStepCharge(
-                totalAmount = finalTotal,          // já com desconto
-                items = itemsForEfi,              // itens em centavos, pós-desconto
+                totalAmount = finalTotal,
+                items = itemsForEfi,
                 paymentToken = request.paymentToken,
                 installments = request.installments,
                 customer = customer,
                 txid = txid,
                 shippingCents = shippingCentsAdjusted,
-                addShippingAsItem = false         // se quiser mover frete pra item, trocar pra true
+                addShippingAsItem = false
             )
         } catch (e: Exception) {
             log.error(
@@ -149,7 +146,7 @@ class CardCheckoutService(
             )
         }
 
-        // watcher opcional (pagamento em análise)
+        // pagamento em análise – opcional watcher
         runCatching {
             val expires = requireNotNull(fresh.reserveExpiresAt).toInstant()
             if (fresh.chargeId != null && cardWatcher != null) {
@@ -172,10 +169,6 @@ class CardCheckoutService(
 
     // ================== privados / util ==================
 
-    /**
-     * Calcula o total original (sem desconto):
-     * soma dos itens + frete.
-     */
     private fun calculateOriginalTotal(
         shipping: Double,
         cart: List<CardCartItemDto>
@@ -186,13 +179,6 @@ class CardCheckoutService(
         return items + shipping.toBigDecimal()
     }
 
-    /**
-     * Aplica regras de cupom no backend.
-     * - usa total original como base
-     * - valida cupom
-     * - escolhe o menor desconto entre frontend e backend
-     * - garante que finalTotal >= 0,01
-     */
     private fun processDiscount(
         request: CardCheckoutRequest,
         originalTotal: BigDecimal
@@ -241,12 +227,6 @@ class CardCheckoutService(
         return Pair(finalTotal, limitedDiscount)
     }
 
-    /**
-     * Cria o pedido no banco, com:
-     * - total = finalTotal (já com cupom)
-     * - discountAmount preenchido
-     * - order_coupons com originalTotal/finalTotal/discountAmount.
-     */
     private fun createOrderTx(
         request: CardCheckoutRequest,
         totalAmount: BigDecimal,
@@ -342,92 +322,119 @@ class CardCheckoutService(
     }
 
     /**
-     * 🔧 Ponto "hard":
+     * HARD MODE:
+     *
      * Distribui o desconto (originalTotal - finalTotal) em centavos
-     * entre frete e itens, de forma que:
+     * entre frete e itens, garantindo que:
      *
-     *    soma(itens_ajustados) + frete_ajustado == finalTotal (em centavos)
+     *   Σ(itens.value * amount) + shippingCents == finalTotal * 100
      *
-     * Sem alterar como o pedido é salvo no banco.
+     * sem mudar o que foi salvo no banco.
      */
     private fun buildEfiAmounts(
         request: CardCheckoutRequest,
         originalTotal: BigDecimal,
         finalTotal: BigDecimal
     ): Pair<List<Map<String, Any>>, Int> {
-        val discountCents = originalTotal
-            .subtract(finalTotal)
+        val originalCents = originalTotal
             .setScale(2, RoundingMode.HALF_UP)
             .multiply(BigDecimal(100))
             .toInt()
 
-        // Base em centavos (sem desconto)
+        val finalCents = finalTotal
+            .setScale(2, RoundingMode.HALF_UP)
+            .multiply(BigDecimal(100))
+            .toInt()
+
+        val discountWanted = (originalCents - finalCents).coerceAtLeast(0)
+
         val baseShippingCents = request.shipping.toBigDecimal()
             .setScale(2, RoundingMode.HALF_UP)
             .multiply(BigDecimal(100))
             .toInt()
 
-        val baseItemsCents = request.cartItems.map { item ->
-            item.price.toBigDecimal()
+        data class Line(val item: CardCartItemDto, val unitCents: Int)
+
+        val lines = request.cartItems.map { item ->
+            val unitCents = item.price.toBigDecimal()
                 .setScale(2, RoundingMode.HALF_UP)
                 .multiply(BigDecimal(100))
-                .toInt() to item
+                .toInt()
+            Line(item, unitCents)
         }
 
-        if (discountCents <= 0) {
-            // Sem desconto: usa tudo como veio
-            val itemsForEfi = baseItemsCents.map { (cents, item) ->
+        if (discountWanted == 0) {
+            val itemsForEfi = lines.map { line ->
                 mapOf(
-                    "name" to item.title,
-                    "value" to cents,
-                    "amount" to item.quantity
+                    "name" to line.item.title,
+                    "value" to line.unitCents,
+                    "amount" to line.item.quantity
                 )
             }
             return Pair(itemsForEfi, baseShippingCents)
         }
 
-        var remaining = discountCents
+        var remaining = discountWanted
 
-        // 1ª etapa: tenta tirar do frete
-        val usedOnShipping = minOf(remaining, baseShippingCents)
-        val shippingAdjusted = baseShippingCents - usedOnShipping
-        remaining -= usedOnShipping
+        // 1) tira do frete primeiro
+        val shippingDiscount = minOf(remaining, baseShippingCents)
+        var shippingCentsAdjusted = baseShippingCents - shippingDiscount
+        remaining -= shippingDiscount
 
-        // 2ª etapa: distribui o resto nos itens (simples: vai consumindo item a item)
-        val adjustedItemsCents = baseItemsCents.mapIndexed { index, (cents, item) ->
-            if (remaining <= 0) {
-                cents to item
-            } else {
-                val maxDiscountOnItem = cents // pode zerar o item se necessário
-                val use = if (index == baseItemsCents.lastIndex) {
-                    // no último item, consome tudo que sobrou (até o máximo possível)
-                    minOf(remaining, maxDiscountOnItem)
-                } else {
-                    minOf(remaining, maxDiscountOnItem)
-                }
-                remaining -= use
-                (cents - use) to item
+        data class Adjusted(val item: CardCartItemDto, val unitCents: Int)
+
+        val adjustedLines = mutableListOf<Adjusted>()
+        var remaindersSum = 0
+
+        for (line in lines) {
+            val quantity = line.item.quantity
+            val lineTotal = line.unitCents * quantity
+
+            if (lineTotal <= 0 || remaining <= 0) {
+                adjustedLines += Adjusted(line.item, line.unitCents)
+                continue
             }
+
+            val lineDiscount = minOf(remaining, lineTotal)
+            val newLineTotal = lineTotal - lineDiscount
+
+            val newUnit = if (quantity > 0) newLineTotal / quantity else 0
+            val remainder = if (quantity > 0) newLineTotal % quantity else 0
+
+            adjustedLines += Adjusted(line.item, newUnit)
+            remaindersSum += remainder
+            remaining -= lineDiscount
         }
 
-        val finalItems = adjustedItemsCents.map { (cents, item) ->
+        // converte linhas ajustadas pra formato Efí
+        val itemsForEfi = adjustedLines.map { adj ->
             mapOf(
-                "name" to item.title,
-                "value" to cents,
-                "amount" to item.quantity
+                "name" to adj.item.title,
+                "value" to adj.unitCents,
+                "amount" to adj.item.quantity
             )
         }
 
-        val totalOriginalCents =
-            baseItemsCents.sumOf { it.first * it.second.quantity } + baseShippingCents
-        val totalAdjustedCents =
-            adjustedItemsCents.sumOf { it.first * it.second.quantity } + shippingAdjusted
+        val itemsTotalCents = adjustedLines.sumOf { it.unitCents * it.item.quantity }
+        var currentTotalCents = itemsTotalCents + shippingCentsAdjusted
+
+        // como fizemos floor na divisão, podemos ter ficado abaixo do alvo;
+        // usamos o frete como "reservatório" pra corrigir 100% a diferença.
+        val targetTotalCents = finalCents
+        val diff = targetTotalCents - currentTotalCents
+        if (diff != 0) {
+            shippingCentsAdjusted += diff
+            currentTotalCents += diff
+        }
+
+        val originalCheckCents =
+            lines.sumOf { it.unitCents * it.item.quantity } + baseShippingCents
 
         log.info(
-            "CARD-EFI-LINES: originalCents={} adjustedCents={} discountCents={}",
-            totalOriginalCents, totalAdjustedCents, discountCents
+            "CARD-EFI-LINES: originalCents={} targetCents={} finalCents={} discountWanted={} remaining={} diff={} shippingFinal={}",
+            originalCheckCents, targetTotalCents, currentTotalCents, discountWanted, remaining, diff, shippingCentsAdjusted
         )
 
-        return Pair(finalItems, shippingAdjusted)
+        return Pair(itemsForEfi, shippingCentsAdjusted)
     }
 }
