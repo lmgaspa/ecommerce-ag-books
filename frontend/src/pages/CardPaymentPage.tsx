@@ -21,6 +21,7 @@ import type { CartItem } from "../context/CartTypes";
 import type { CheckoutFormData } from "../types/CheckoutTypes";
 import { CartContext } from "../context/CartContext";
 import { OrderSummary } from "../components/OrderSummary";
+import ReviewPurchaseButton from "../components/common/ReviewPurchaseButton";
 
 /* ===================== Local types & helpers ===================== */
 
@@ -725,6 +726,8 @@ export default function CardPaymentPage() {
           ? "Pagamento Expirado"
           : "Pagar com Cartão"}
       </button>
+        {/* 🔁 Botão global reutilizável */}
+      <ReviewPurchaseButton />
     </div>
   );
 }
