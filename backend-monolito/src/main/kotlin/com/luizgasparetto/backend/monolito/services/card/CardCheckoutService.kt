@@ -195,27 +195,21 @@ class CardCheckoutService(
             return Pair(originalTotal, BigDecimal.ZERO)
         }
 
-        // Usar o desconto enviado pelo frontend se disponível
-        val frontendDiscount = request.discount?.toBigDecimal() ?: BigDecimal.ZERO
+        // SEGURANÇA: O backend é a fonte da verdade para o desconto.
+        // Ignoramos completamente o request.discount do frontend para evitar manipulação.
+        // O frontend deve enviar apenas o couponCode, e o backend recalcula tudo do zero.
         val calculatedDiscount = couponValidation.discountAmount
 
-        // Aplicar o menor desconto entre frontend e calculado
-        val finalDiscount = if (frontendDiscount > BigDecimal.ZERO) {
-            minOf(frontendDiscount, calculatedDiscount)
-        } else {
-            calculatedDiscount
-        }
-
-        // Garantir que o desconto não seja maior que o total
+        // Garantir que o desconto não seja maior que o total (deixando pelo menos R$ 0,01)
         val maxAllowedDiscount = originalTotal - BigDecimal("0.01")
-        val limitedDiscount = minOf(finalDiscount, maxAllowedDiscount)
+        val limitedDiscount = minOf(calculatedDiscount, maxAllowedDiscount)
 
         val finalTotal = originalTotal - limitedDiscount
 
         log.info("💳 PROCESSAMENTO DESCONTO CARD:")
-        log.info("  - Desconto frontend: {}", frontendDiscount)
-        log.info("  - Desconto calculado: {}", calculatedDiscount)
-        log.info("  - Desconto final: {}", limitedDiscount)
+        log.info("  - Desconto frontend (IGNORADO por segurança): {}", request.discount)
+        log.info("  - Desconto calculado pelo backend: {}", calculatedDiscount)
+        log.info("  - Desconto final aplicado: {}", limitedDiscount)
         log.info("  - Total final: {}", finalTotal)
 
         return Pair(finalTotal, limitedDiscount)

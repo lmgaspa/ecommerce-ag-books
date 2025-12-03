@@ -40,37 +40,6 @@ class PayoutPixEmailService(
         DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm:ss", Locale.forLanguageTag("pt-BR"))
 
     // ----------------------------------------------------------------
-    // IDEMPOTÊNCIA: checa se já existe e-mail de REPASSE_PIX SENT
-    // ----------------------------------------------------------------
-
-    private fun alreadySentConfirmedRepasse(orderId: Long): Boolean {
-        val payoutId = findPayoutIdByOrderId(orderId)
-
-        if (payoutId == null) {
-            log.warn(
-                "PayoutEmail [PIX]: não foi possível encontrar payoutId para orderId={}, não será feita checagem de idempotência.",
-                orderId
-            )
-            return false
-        }
-
-        val exists = payoutEmailRepository.existsByPayoutIdAndEmailTypeAndStatus(
-            payoutId,
-            PayoutEmailType.REPASSE_PIX.name,   // String, casa com emailType
-            PayoutEmailStatus.SENT
-        )
-
-        if (exists) {
-            log.info(
-                "PayoutEmail [PIX]: e-mail REPASSE_PIX já enviado (payoutId={}, orderId={}), pulando novo envio.",
-                payoutId, orderId
-            )
-        }
-
-        return exists
-    }
-
-    // ----------------------------------------------------------------
     // PÚBLICO: SUCESSO
     // ----------------------------------------------------------------
 
@@ -85,18 +54,21 @@ class PayoutPixEmailService(
         extraNote: String? = null,
         to: String = authorEmail              // pode sobrescrever para multi-autor
     ) {
-        log.info(
-            "📧 PAYOUT PIX EMAIL [CONFIRMED]: iniciando envio - orderId={}, to={}, sandbox={}, mailHost={}",
-            orderId, to, sandbox, mailHost
-        )
-
-        // 🔒 Idempotência: se já existe e-mail SENT de REPASSE_PIX para este payout, não envia de novo
-        if (alreadySentConfirmedRepasse(orderId)) {
+        // Idempotência sem tocar no repositório (OCP): usa API existente
+        if (alreadySentForOrder(orderId, PayoutEmailType.REPASSE_PIX)) {
+            log.info(
+                "📧 PAYOUT PIX EMAIL [CONFIRMED]: já existe e-mail SENT para orderId={} type={}, não reenviando",
+                orderId, PayoutEmailType.REPASSE_PIX
+            )
             return
         }
 
         val from = resolveFrom()
 
+        log.info(
+            "📧 PAYOUT PIX EMAIL [CONFIRMED]: iniciando envio - orderId={}, to={}, sandbox={}, mailHost={}",
+            orderId, to, sandbox, mailHost
+        )
         log.debug(
             "📧 PAYOUT PIX EMAIL [CONFIRMED]: config -> from={}, authorEmail={}, appTz={}, favoredKeyFromConfig={}, logoUrl={}",
             from, authorEmail, appTz, favoredKeyFromConfig, logoUrl
@@ -226,7 +198,7 @@ class PayoutPixEmailService(
     }
 
     // ----------------------------------------------------------------
-    // CORE MAIL (envio real) - sem spring.mail.*, só env + mail.from
+    // CORE MAIL (envio real)
     // ----------------------------------------------------------------
 
     private fun sendInternal(
@@ -420,7 +392,7 @@ class PayoutPixEmailService(
         return """
         <html>
         <body style="font-family:Arial,Helvetica,sans-serif;background:#f6f7f9;padding:24px">
-          <div style="max-width:640px;margin:0 auto;background:#fff;border:1px solid #eee;border-radius:12px;overflow:hidden">
+          <div style="max-width:640px;margin:0 auto;background:#fff;border:1px solid:#eee;border-radius:12px;overflow:hidden">
 
             <!-- HEADER -->
             <div style="background:linear-gradient(135deg,#0a2239,#0e4b68);color:#fff;padding:16px 20px;">
@@ -464,7 +436,7 @@ class PayoutPixEmailService(
               <span role="img" aria-label="raio"
                     style="color:#ffd200;font-size:22px;vertical-align:middle;">&#x26A1;&#xFE0E;</span>
               <span style="vertical-align:middle;">© ${Year.now()} · Powered by
-                <strong>AndesCore Software</strong>
+                <strong>AndesCoreSoftware</strong>
               </span>
             </div>
           </div>
@@ -494,6 +466,18 @@ class PayoutPixEmailService(
         )
 
         return resolved
+    }
+
+    private fun alreadySentForOrder(orderId: Long, type: PayoutEmailType): Boolean {
+        val emails = payoutEmailRepository.findByOrderIdAndEmailType(orderId, type.name)
+        val hasSent = emails.any { it.status == PayoutEmailStatus.SENT }
+        if (hasSent) {
+            log.debug(
+                "PayoutEmail [PIX]: já há registro SENT para orderId={} type={}",
+                orderId, type
+            )
+        }
+        return hasSent
     }
 
     private fun escape(s: String): String =
