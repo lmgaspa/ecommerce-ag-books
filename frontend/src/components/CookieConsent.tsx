@@ -3,15 +3,28 @@ import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { apiGet, apiPost } from "../api/http";
 
+type ConsentView = {
+  analytics: boolean;
+  marketing: boolean;
+  version: number;
+  ts: number;
+};
+
 export default function CookieConsent() {
   const [visible, setVisible] = useState(false);
 
   const notifyGate = (value: "true" | "false") => {
     try {
-      localStorage.setItem("analyticsConsent", value === "true" ? "true" : "false");
+      localStorage.setItem(
+        "analyticsConsent",
+        value === "true" ? "true" : "false"
+      );
     } catch (err) {
       if (import.meta.env.DEV) {
-        console.warn("CookieConsent: não foi possível usar localStorage.", err);
+        console.warn(
+          "CookieConsent: não foi possível usar localStorage.",
+          err
+        );
       }
     }
     window.dispatchEvent(new Event("cookie-consent-changed"));
@@ -29,23 +42,19 @@ export default function CookieConsent() {
   useEffect(() => {
     const checkConsent = async () => {
       try {
-        const response = await apiGet<{ consented: boolean }>("/privacy/consent");
-        if (response.consented) {
-          const isLocalhost =
-            window.location.hostname === "localhost" ||
-            window.location.hostname === "127.0.0.1";
-          const extra = isLocalhost ? "SameSite=Lax;" : "Secure; SameSite=None;";
-          document.cookie = `cookie_consent=true; max-age=31536000; path=/; ${extra}`;
+        const response = await apiGet<ConsentView>("/privacy/consent");
 
-          // 🔑 Também sincroniza localStorage + dispara evento,
-          // para o AnalyticsGate carregar GA4 mesmo no “primeiro load”.
-          notifyGate("true");
+        if (response) {
+          // Regra: consideramos "consentido" se ao menos um tipo está ON
+          const accepted = response.analytics || response.marketing;
 
+          setCookie(accepted ? "true" : "false");
+          notifyGate(accepted ? "true" : "false");
           setVisible(false);
           return;
         }
       } catch {
-        // Se API falhar, usa apenas cookie local como fallback
+        // Se API falhar, cai pro cookie local
       }
 
       const consent = document.cookie.includes("cookie_consent=true");
@@ -61,9 +70,13 @@ export default function CookieConsent() {
     setVisible(false);
 
     try {
-      await apiPost("/privacy/consent", { consented: true });
+      await apiPost("/privacy/consent", {
+        analytics: true,
+        marketing: true, // se quiser marketing separado, depois você muda aqui
+        version: 1,
+      });
     } catch {
-      // Silencioso
+      // Silencioso – UX já está ok para o usuário
     }
   };
 
@@ -73,7 +86,11 @@ export default function CookieConsent() {
     setVisible(false);
 
     try {
-      await apiPost("/privacy/consent", { consented: false });
+      await apiPost("/privacy/consent", {
+        analytics: false,
+        marketing: false,
+        version: 1,
+      });
     } catch {
       // Silencioso
     }
@@ -93,8 +110,8 @@ export default function CookieConsent() {
       aria-live="polite"
     >
       <p className="text-sm leading-relaxed sm:max-w-[70%]">
-        Usamos cookies para melhorar sua experiência e analisar as métricas do site.
-        Você pode aceitar ou recusar conforme a{" "}
+        Usamos cookies para melhorar sua experiência e analisar as métricas do
+        site. Você pode aceitar ou recusar conforme a{" "}
         <span className="font-semibold">
           LGPD - Lei Geral de Proteção de Dados Pessoais
         </span>
