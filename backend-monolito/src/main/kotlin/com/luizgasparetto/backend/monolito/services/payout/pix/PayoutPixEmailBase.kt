@@ -95,9 +95,27 @@ abstract class PayoutPixEmailBase(
     }
 
     /**
+     * Data class para detalhamento do desconto aplicado no repasse
+     */
+    protected data class DiscountDetails(
+        val fee: BigDecimal,
+        val margin: BigDecimal,
+        val totalDiscount: BigDecimal,
+        val amountGross: BigDecimal,
+        val amountNet: BigDecimal
+    )
+
+    /**
      * Calcula o valor líquido (após taxas) usando as mesmas regras do PaymentTriggerService
      */
     protected fun calculateNetAmount(amountGross: BigDecimal): BigDecimal {
+        return calculateDiscountDetails(amountGross).amountNet
+    }
+
+    /**
+     * Calcula o detalhamento completo do desconto (fee, margin, total)
+     */
+    protected fun calculateDiscountDetails(amountGross: BigDecimal): DiscountDetails {
         val hundred = BigDecimal("100")
         val feePercent = BigDecimal.valueOf(payoutProps.feePercent)
         val feeFixed = BigDecimal.valueOf(payoutProps.feeFixed)
@@ -112,11 +130,20 @@ abstract class PayoutPixEmailBase(
         }
         val margin = amountGross.multiply(marginPercent).divide(hundred, 2, RoundingMode.HALF_UP).plus(marginFixed)
 
-        var net = amountGross.minus(fee).minus(margin).setScale(2, RoundingMode.HALF_UP)
+        val totalDiscount = fee.plus(margin).setScale(2, RoundingMode.HALF_UP)
+        var net = amountGross.minus(totalDiscount).setScale(2, RoundingMode.HALF_UP)
+        
         if (net >= amountGross) {
             net = amountGross.minus(BigDecimal("0.01")).setScale(2, RoundingMode.HALF_UP)
         }
-        return net
+        
+        return DiscountDetails(
+            fee = fee.setScale(2, RoundingMode.HALF_UP),
+            margin = margin.setScale(2, RoundingMode.HALF_UP),
+            totalDiscount = totalDiscount,
+            amountGross = amountGross.setScale(2, RoundingMode.HALF_UP),
+            amountNet = net
+        )
     }
 
     protected fun escape(s: String): String =
@@ -151,6 +178,83 @@ abstract class PayoutPixEmailBase(
             log.warn("PayoutEmail [PIX]: payout não encontrado para orderId={}: {}", orderId, e.message)
             null
         }
+    }
+
+    /**
+     * Gera o bloco HTML com detalhamento do desconto aplicado no repasse
+     */
+    protected fun buildDiscountDetailsBlock(details: DiscountDetails): String {
+        val grossFmt = "R$ %.2f".format(details.amountGross.toDouble())
+        val feeFmt = "R$ %.2f".format(details.fee.toDouble())
+        val marginFmt = "R$ %.2f".format(details.margin.toDouble())
+        val discountFmt = "R$ %.2f".format(details.totalDiscount.toDouble())
+        val netFmt = "R$ %.2f".format(details.amountNet.toDouble())
+        
+        val feePercentFmt = if (payoutProps.fees.includeGatewayFees) {
+            "%.2f%%".format(payoutProps.feePercent)
+        } else {
+            "-"
+        }
+        val marginPercentFmt = "%.2f%%".format(payoutProps.marginPercent)
+        
+        // Formata a descrição da taxa do gateway
+        val feeLabel = if (payoutProps.fees.includeGatewayFees) {
+            if (payoutProps.feeFixed > 0) {
+                "Taxa do gateway (${feePercentFmt} + R$ ${payoutProps.feeFixed}):"
+            } else {
+                "Taxa do gateway (${feePercentFmt}):"
+            }
+        } else {
+            "Taxa do gateway: (não aplicada)"
+        }
+        
+        // Formata a descrição da margem
+        val marginLabel = if (payoutProps.marginFixed > 0) {
+            "Margem (${marginPercentFmt} + R$ ${payoutProps.marginFixed}):"
+        } else {
+            "Margem (${marginPercentFmt}):"
+        }
+        
+        return """
+            <!-- DETALHAMENTO DE DESCONTO -->
+            <div style="background:#f8f9fa;border:1px solid #dee2e6;border-radius:8px;padding:20px;margin:16px 0;">
+              <div style="font-weight:700;color:#495057;font-size:16px;margin-bottom:12px;text-align:center;">
+                💰 Detalhamento do Repasse
+              </div>
+              <table width="100%" cellspacing="0" cellpadding="8" style="border-collapse:collapse;font-size:14px;">
+                <tr>
+                  <td style="color:#6c757d;padding:6px 8px;text-align:left;">Valor bruto do pedido:</td>
+                  <td style="font-weight:600;color:#212529;padding:6px 8px;text-align:right;">$grossFmt</td>
+                </tr>
+                <tr style="background:#fff;">
+                  <td style="color:#6c757d;padding:6px 8px;text-align:left;border-top:1px solid #dee2e6;">
+                    $feeLabel
+                  </td>
+                  <td style="color:#dc3545;font-weight:600;padding:6px 8px;text-align:right;border-top:1px solid #dee2e6;">-$feeFmt</td>
+                </tr>
+                <tr>
+                  <td style="color:#6c757d;padding:6px 8px;text-align:left;border-top:1px solid #dee2e6;">
+                    $marginLabel
+                  </td>
+                  <td style="color:#dc3545;font-weight:600;padding:6px 8px;text-align:right;border-top:1px solid #dee2e6;">-$marginFmt</td>
+                </tr>
+                <tr style="background:#fff3cd;">
+                  <td style="font-weight:700;color:#856404;padding:8px;text-align:left;border-top:2px solid #ffc107;">
+                    Custos de Operação:
+                  </td>
+                  <td style="font-weight:700;color:#dc3545;padding:8px;text-align:right;border-top:2px solid #ffc107;">-$discountFmt</td>
+                </tr>
+                <tr style="background:#d4edda;">
+                  <td style="font-weight:700;color:#155724;padding:10px 8px;text-align:left;border-top:2px solid #28a745;font-size:16px;">
+                    Valor líquido repassado:
+                  </td>
+                  <td style="font-weight:700;color:#155724;padding:10px 8px;text-align:right;border-top:2px solid #28a745;font-size:18px;">
+                    $netFmt
+                  </td>
+                </tr>
+              </table>
+            </div>
+        """.trimIndent()
     }
 
     /**

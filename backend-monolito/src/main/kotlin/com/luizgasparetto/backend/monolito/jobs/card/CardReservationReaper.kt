@@ -53,10 +53,14 @@ class CardReservationReaper(
             // 2) tenta cancelar a cobrança no provedor do cartão
             try {
                 val ok = cardService.cancelCharge(chargeId)
-                if (ok) log.info("CARD-REAPER: cobrança cancelada chargeId={}", chargeId)
-                else     log.warn("CARD-REAPER: cancel não-2xx chargeId={}", chargeId)
+                if (ok) {
+                    log.info("CARD-REAPER: cobrança cancelada ou já estava inativa chargeId={}", chargeId)
+                } else {
+                    log.warn("CARD-REAPER: cancel não-2xx chargeId={}", chargeId)
+                }
             } catch (e: Exception) {
-                log.warn("CARD-REAPER: falha ao cancelar chargeId={}: {}", chargeId, e.message)
+                // Se chegar aqui, é um erro inesperado (não deveria acontecer após a correção do CardClient)
+                log.warn("CARD-REAPER: erro inesperado ao cancelar chargeId={}: {}", chargeId, e.message)
             }
 
             // 3) marca pedido como expirado

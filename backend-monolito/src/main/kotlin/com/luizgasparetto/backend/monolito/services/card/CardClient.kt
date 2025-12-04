@@ -7,6 +7,7 @@ import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.http.*
 import org.springframework.stereotype.Component
+import org.springframework.web.client.HttpClientErrorException
 import org.springframework.web.client.HttpStatusCodeException
 import org.springframework.web.client.RestTemplate
 
@@ -54,7 +55,17 @@ class CardClient(
     fun cancel(chargeId: String): Boolean {
         val url = "${baseUrl()}/v1/charge/$chargeId/cancel"
         val headers = bearerHeaders()
-        val resp = rt.exchange(url, HttpMethod.POST, HttpEntity(emptyMap<String, Any>(), headers), String::class.java)
-        return resp.statusCode.is2xxSuccessful
+        return try {
+            val resp = rt.exchange(url, HttpMethod.POST, HttpEntity(emptyMap<String, Any>(), headers), String::class.java)
+            resp.statusCode.is2xxSuccessful
+        } catch (e: HttpClientErrorException.NotFound) {
+            // 404 significa que o charge já foi cancelado ou não existe mais
+            // Isso é um caso esperado, então retornamos true (objetivo alcançado: charge não está ativo)
+            log.debug("CARD cancel: chargeId={} não encontrado (já cancelado ou não existe)", chargeId)
+            true
+        } catch (e: HttpStatusCodeException) {
+            log.warn("CARD cancel: HTTP={} chargeId={} body={}", e.statusCode, chargeId, e.responseBodyAsString)
+            false
+        }
     }
 }

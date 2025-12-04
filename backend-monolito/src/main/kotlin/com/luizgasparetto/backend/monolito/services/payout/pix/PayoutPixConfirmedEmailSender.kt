@@ -145,8 +145,12 @@ class PayoutPixConfirmedEmailSender(
             whenStr: String,
             note: String?
     ): String {
-        val amountNet = calculateNetAmount(amount)
-        val valorFmt = "R$ %s".format(amountNet.setScale(2).toPlainString())
+        // Busca o valor bruto do pedido
+        val order = orderRepository.findById(orderId).orElse(null)
+        val amountGross = order?.total ?: amount
+        
+        // Calcula os detalhes do desconto usando o valor bruto
+        val discountDetails = calculateDiscountDetails(amountGross)
 
         val cpfFmt = formatCpfIfPossible(payeePixKey)
         val favorecidoLine =
@@ -172,6 +176,7 @@ class PayoutPixConfirmedEmailSender(
                         ?: ""
 
         val couponBlock = buildCouponBlock(orderId)
+        val discountBlock = buildDiscountDetailsBlock(discountDetails)
 
         return """
         <html>
@@ -184,11 +189,11 @@ class PayoutPixConfirmedEmailSender(
               <p style="margin:0 0 6px">🎉 <strong>Repasse PIX realizado com sucesso.</strong></p>
 
               <p style="margin:6px 0"><strong>🧾 Pedido:</strong> #${escape(orderId.toString())}</p>
-              <p style="margin:6px 0"><strong>💰 Valor repassado:</strong> $valorFmt</p>
               $favorecidoLine
               <p style="margin:6px 0"><strong>📦 Id do envio:</strong> ${escape(idEnvio)}</p>
               <p style="margin:6px 0"><strong>🕒 Data/hora:</strong> ${escape(whenStr)}</p>
 
+              $discountBlock
               $extraOk
               $couponBlock
               $noteBlock

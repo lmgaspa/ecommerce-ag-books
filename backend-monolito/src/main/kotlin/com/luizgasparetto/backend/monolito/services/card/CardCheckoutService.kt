@@ -3,6 +3,7 @@ package com.luizgasparetto.backend.monolito.services.card
 import com.luizgasparetto.backend.monolito.dto.card.CardCartItemDto
 import com.luizgasparetto.backend.monolito.dto.card.CardCheckoutRequest
 import com.luizgasparetto.backend.monolito.dto.card.CardCheckoutResponse
+import com.luizgasparetto.backend.monolito.events.OrderCreatedEvent
 import com.luizgasparetto.backend.monolito.exceptions.PaymentGatewayException
 import com.luizgasparetto.backend.monolito.models.coupon.OrderCoupon
 import com.luizgasparetto.backend.monolito.models.order.Order
@@ -12,9 +13,9 @@ import com.luizgasparetto.backend.monolito.repositories.OrderCouponRepository
 import com.luizgasparetto.backend.monolito.repositories.OrderRepository
 import com.luizgasparetto.backend.monolito.services.book.BookService
 import com.luizgasparetto.backend.monolito.services.coupon.CouponService
-import com.luizgasparetto.backend.monolito.services.email.order.OrderStatusEmailService
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
+import org.springframework.context.ApplicationEventPublisher
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.math.BigDecimal
@@ -31,7 +32,7 @@ class CardCheckoutService(
     private val processor: CardPaymentProcessor,
     private val couponService: CouponService,
     private val orderCouponRepository: OrderCouponRepository,
-    private val orderStatusEmailService: OrderStatusEmailService,
+    private val eventPublisher: ApplicationEventPublisher,
     private val cardWatcher: CardWatcher? = null
 ) {
     private val log = LoggerFactory.getLogger(CardCheckoutService::class.java)
@@ -70,11 +71,9 @@ class CardCheckoutService(
         }
         reserveItemsTx(order, reserveTtlSeconds)
 
-        // 1.1) Envia email de confirmação de pedido criado (PENDING/WAITING)
-        runCatching {
-            orderStatusEmailService.sendPendingEmail(order)
-        }.onFailure { e ->
-            log.warn("Falha ao enviar email de pedido criado (orderId={}): {}", order.id, e.message)
+        // 1.1) Publica evento de pedido criado (email será enviado AFTER_COMMIT)
+        if (order.id != null) {
+            eventPublisher.publishEvent(OrderCreatedEvent(order.id!!))
         }
 
         // 2) distribuir desconto entre itens e frete para alinhar com finalTotal
@@ -109,7 +108,6 @@ class CardCheckoutService(
             log.error("CARD: falha ao cobrar, liberando reserva. orderId={}, err={}", order.id, e.message, e)
             releaseReservationTx(order.id!!)
 
-            // 🔴 Aqui a mudança: não devolve CardCheckoutResponse, lança erro de gateway
             throw PaymentGatewayException(
                 message = "Não foi possível comunicar com o processador de cartão. Tente novamente em instantes.",
                 gatewayCode = "CARD_ONE_STEP_ERROR"

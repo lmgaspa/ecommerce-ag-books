@@ -11,12 +11,19 @@ import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.mail.javamail.JavaMailSender
 import org.springframework.mail.javamail.MimeMessageHelper
+import org.springframework.transaction.annotation.Propagation
+import org.springframework.transaction.annotation.Transactional
 import java.math.BigDecimal
 import java.nio.charset.StandardCharsets
 import java.time.OffsetDateTime
 
 /**
- * Classe base com funcionalidades compartilhadas para emails de status de pedido
+ * Classe base com funcionalidades compartilhadas para emails de status de pedido.
+ *
+ * Responsabilidades:
+ * - Montar HTML dos emails
+ * - Enviar email via JavaMailSender
+ * - Persistir auditoria em order_email (transação própria)
  */
 abstract class OrderStatusEmailBase(
     protected val mailSender: JavaMailSender,
@@ -48,6 +55,15 @@ abstract class OrderStatusEmailBase(
         }
     }
 
+    /**
+     * Persiste o registro de email em uma transação separada (REQUIRES_NEW)
+     * para garantir que o pedido já esteja commitado no banco de dados.
+     *
+     * IMPORTANTE:
+     * - Este método NUNCA lança exceções para o chamador.
+     * - Qualquer falha na auditoria é logada, mas não quebra o fluxo principal
+     *   (nem o listener de eventos, nem o checkout).
+     */
     protected fun persistEmail(
         orderId: Long,
         to: String,
@@ -55,25 +71,43 @@ abstract class OrderStatusEmailBase(
         status: OrderEmailStatus,
         errorMessage: String? = null
     ) {
-        try {
-            val orderEmail = OrderEmail(
-                orderId = orderId,
-                toEmail = to,
-                emailType = emailType.name,
-                sentAt = OffsetDateTime.now(),
-                status = status,
-                errorMessage = errorMessage
+        runCatching {
+            persistEmailTx(orderId, to, emailType, status, errorMessage)
+        }.onFailure { e ->
+            log.error(
+                "OrderEmail: erro ao persistir e-mail para orderId={} type={} status={}: {}",
+                orderId, emailType, status, e.message, e
             )
-
-            orderEmailRepository.save(orderEmail)
-
-            log.debug(
-                "OrderEmail: persistido orderId={} type={} status={} error={}",
-                orderId, emailType, status, errorMessage
-            )
-        } catch (e: Exception) {
-            log.error("OrderEmail: erro ao persistir e-mail para orderId={}: {}", orderId, e.message, e)
         }
+    }
+
+    /**
+     * Método realmente transacional, isolado em REQUIRES_NEW.
+     * Se algo der errado aqui, apenas esta transação é revertida.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    protected fun persistEmailTx(
+        orderId: Long,
+        to: String,
+        emailType: OrderEmailType,
+        status: OrderEmailStatus,
+        errorMessage: String? = null
+    ) {
+        val orderEmail = OrderEmail(
+            orderId = orderId,
+            toEmail = to,
+            emailType = emailType.name,
+            sentAt = OffsetDateTime.now(),
+            status = status,
+            errorMessage = errorMessage
+        )
+
+        orderEmailRepository.save(orderEmail)
+
+        log.debug(
+            "OrderEmail: persistido orderId={} type={} status={} error={}",
+            orderId, emailType, status, errorMessage
+        )
     }
 
     protected fun escapeHtml(s: String): String =
@@ -142,4 +176,3 @@ abstract class OrderStatusEmailBase(
 
     protected fun buildFooter(): String = EmailFooter.build()
 }
-

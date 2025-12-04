@@ -50,12 +50,13 @@ class CardSecurityInvalidator(
                     // Tenta cancelar a cobrança na Efí
                     val cancelled = cardService.cancelCharge(order.chargeId!!)
                     if (cancelled) {
-                        log.info("CARD_INVALIDATOR: Cobrança CARD chargeId={} cancelada na Efí por segurança.", order.chargeId)
+                        log.info("CARD_INVALIDATOR: Cobrança CARD chargeId={} cancelada ou já estava inativa na Efí.", order.chargeId)
                     } else {
-                        log.warn("CARD_INVALIDATOR: Falha ao cancelar cobrança CARD chargeId={} na Efí.", order.chargeId)
+                        log.warn("CARD_INVALIDATOR: Falha ao cancelar cobrança CARD chargeId={} na Efí (resposta não-2xx).", order.chargeId)
                     }
                 }.onFailure { e ->
-                    log.error("CARD_INVALIDATOR: Erro ao tentar cancelar CARD chargeId={}: {}", order.chargeId, e.message, e)
+                    // Se chegar aqui, é um erro inesperado (não deveria acontecer após a correção do CardClient)
+                    log.warn("CARD_INVALIDATOR: Erro inesperado ao cancelar CARD chargeId={}: {}", order.chargeId, e.message)
                 }
 
                 // Marca o pedido como EXPIRED no sistema

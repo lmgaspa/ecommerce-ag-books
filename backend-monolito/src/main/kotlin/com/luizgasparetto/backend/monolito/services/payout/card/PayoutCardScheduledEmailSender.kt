@@ -93,8 +93,14 @@ class PayoutCardScheduledEmailSender(
         idEnvio: String,
         note: String?
     ): String {
-        val amountNet = calculateNetAmount(amount)
-        val valorFmt = "R$ %s".format(amountNet.setScale(2).toPlainString())
+        // Busca o valor bruto do pedido
+        val order = orderRepository.findById(orderId).orElse(null)
+        val amountGross = order?.total ?: amount
+        
+        // Calcula os detalhes do desconto usando o valor bruto
+        val discountDetails = calculateDiscountDetails(amountGross)
+        val discountBlock = buildDiscountDetailsBlock(discountDetails)
+        
         val cpfFmt = formatCpfIfPossible(payeePixKey)
         val favorecidoLine = if (cpfFmt != null)
             "<p style=\"margin:6px 0\"><strong>👤 Favorecido (CPF):</strong> $cpfFmt</p>"
@@ -133,10 +139,11 @@ class PayoutCardScheduledEmailSender(
               <p style="margin:6px 0;color:#666;font-size:14px;">Por política da Efí Bank, repasses de cartão são processados após 32 dias da aprovação.</p>
 
               <p style="margin:6px 0"><strong>🧾 Pedido:</strong> #${escape(orderId.toString())}</p>
-              <p style="margin:6px 0"><strong>💰 Valor a ser repassado:</strong> $valorFmt</p>
               $favorecidoLine
               <p style="margin:6px 0"><strong>📦 Id do envio:</strong> ${escape(idEnvio)}</p>
               <p style="margin:6px 0"><strong>📅 Data prevista:</strong> 32 dias após aprovação</p>
+
+              $discountBlock
 
               <div style="background:#f0f8ff;border-left:4px solid #2196f3;padding:12px;margin:16px 0;">
                 <p style="margin:0;font-size:14px;color:#1976d2;">

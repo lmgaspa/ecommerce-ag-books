@@ -56,8 +56,15 @@ class PayoutCardConfirmedEmailSender(
         )
 
         val maskedKey = payeePixKey?.let { mask(it) } ?: "N/A"
-        val amountNet = calculateNetAmount(amount)
-        val amountFormatted = String.format("R$ %.2f", amountNet)
+        val amountFormatted = String.format("R$ %.2f", amount.toDouble())
+        
+        // Busca o valor bruto do pedido
+        val order = orderRepository.findById(orderId).orElse(null)
+        val amountGross = order?.total ?: amount
+        
+        // Calcula os detalhes do desconto usando o valor bruto
+        val discountDetails = calculateDiscountDetails(amountGross)
+        val discountBlock = buildDiscountDetailsBlock(discountDetails)
 
         val htmlContent = """
             <!DOCTYPE html>
@@ -83,11 +90,12 @@ class PayoutCardConfirmedEmailSender(
                         <div class="info-box">
                             <h3>📋 Detalhes do Repasse</h3>
                             <p><strong>Pedido:</strong> #$orderId</p>
-                            <p><strong>Valor:</strong> <span class="amount">$amountFormatted</span></p>
                             <p><strong>Chave PIX:</strong> $maskedKey</p>
                             <p><strong>ID Envio:</strong> $idEnvio</p>
                             ${note?.let { "<p><strong>Observação:</strong> ${escape(it)}</p>" } ?: ""}
                         </div>
+                        
+                        $discountBlock
                         
                         <div class="info-box">
                             <h3>✅ Status</h3>
