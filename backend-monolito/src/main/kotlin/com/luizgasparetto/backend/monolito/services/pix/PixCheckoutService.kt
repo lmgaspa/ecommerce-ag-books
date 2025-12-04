@@ -10,6 +10,7 @@ import com.luizgasparetto.backend.monolito.services.book.BookService
 import com.luizgasparetto.backend.monolito.services.coupon.CouponService
 import com.luizgasparetto.backend.monolito.repositories.OrderCouponRepository
 import com.luizgasparetto.backend.monolito.models.coupon.OrderCoupon
+import com.luizgasparetto.backend.monolito.services.email.order.OrderStatusEmailService
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
@@ -26,6 +27,7 @@ class PixCheckoutService(
     private val pixService: PixService,
     private val couponService: CouponService,
     private val orderCouponRepository: OrderCouponRepository,
+    private val orderStatusEmailService: OrderStatusEmailService,
     @Value("\${efi.pix.chave}") private val chavePix: String,
     @Value("\${checkout.reserve.ttl-seconds:300}") private val reserveTtlSeconds: Long
 ) {
@@ -62,6 +64,13 @@ class PixCheckoutService(
 
         // 2) reserva estoque + define TTL (TX)
         reserveItemsTx(order, reserveTtlSeconds)
+
+        // 2.1) Envia email de confirmação de pedido criado (PENDING/WAITING)
+        runCatching {
+            orderStatusEmailService.sendPendingEmail(order)
+        }.onFailure { e ->
+            log.warn("Falha ao enviar email de pedido criado (orderId={}): {}", order.id, e.message)
+        }
 
         // 3) cria cobrança Pix via serviço centralizado; se falhar, libera reserva
         val cob = try {
@@ -111,11 +120,23 @@ class PixCheckoutService(
         }
 
         // Validar cupom primeiro
+        // Converter PixCartItemDto para CardCartItemDto (mesma estrutura)
+        val cardCartItems = request.cartItems.map { pixItem ->
+            com.luizgasparetto.backend.monolito.dto.card.CardCartItemDto(
+                id = pixItem.id,
+                title = pixItem.title,
+                price = pixItem.price,
+                quantity = pixItem.quantity,
+                imageUrl = pixItem.imageUrl
+            )
+        }
+        
         val couponValidation = couponService.validateCoupon(
             CouponService.CouponValidationRequest(
                 code = request.couponCode,
                 orderTotal = originalTotal,
-                userEmail = request.email
+                userEmail = request.email,
+                cartItems = cardCartItems
             )
         )
 

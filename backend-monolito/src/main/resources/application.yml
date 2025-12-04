@@ -111,24 +111,12 @@ efi:
       delay:
         cardDays: ${EFI_PAYOUT_DELAY_CARD_DAYS:32}
         pixMinutes: ${EFI_PAYOUT_DELAY_PIX_MINUTES:0}
+      scheduler:
+        card:
+          cron: "${PAYOUT_SCHED_CARD_CRON:0 17 3 * * *}"
+          batchSize: ${PAYOUT_SCHED_CARD_BATCH:100}
     behavior:
       onePayoutPerAuthorPerOrder: true
-
-payout:   # espelho para consumidores legados
-  fee-percent: ${EFI_PAYOUT_FEE_PERCENT:0}
-  fee-fixed: ${EFI_PAYOUT_FEE_FIXED:0}
-  margin-percent: ${EFI_PAYOUT_MARGIN_PERCENT:0.8}
-  margin-fixed: ${EFI_PAYOUT_MARGIN_FIXED:0}
-  min-send: ${EFI_PAYOUT_MIN_SEND:1.00}
-  fees:
-    includeGatewayFees: true
-  delay:
-    cardDays: ${EFI_PAYOUT_DELAY_CARD_DAYS:32}
-    pixMinutes: ${EFI_PAYOUT_DELAY_PIX_MINUTES:0}
-  scheduler:
-    card:
-      cron: "${PAYOUT_SCHED_CARD_CRON:0 17 3 * * *}"
-      batchSize: ${PAYOUT_SCHED_CARD_BATCH:100}
 
 springdoc:
   api-docs:
@@ -168,3 +156,13 @@ coupon:
     valid-from: ${COUPON_BONUS_VALID_FROM:}  # ISO format, vazio = NOW
     valid-until: ${COUPON_BONUS_VALID_UNTIL:}  # ISO format, vazio = sem expiração
     active: ${COUPON_BONUS_ACTIVE:true}
+  lancamento:
+    enabled: ${COUPON_LANCAMENTO_ENABLED:true}
+    code: ${COUPON_LANCAMENTO_CODE:LANCAMENTO}  # Obrigatório se enabled=true - ex: "LANCAMENTO"
+    name: ${COUPON_LANCAMENTO_NAME:Cupom Lançamento}
+    description: ${COUPON_LANCAMENTO_DESCRIPTION:Desconto em livros de lançamento}
+    discount-value: ${COUPON_LANCAMENTO_DISCOUNT_VALUE:5.00}  # Obrigatório se enabled=true
+    minimum-order-value: ${COUPON_LANCAMENTO_MINIMUM_ORDER_VALUE:0.00}
+    valid-from: ${COUPON_LANCAMENTO_VALID_FROM:}  # ISO format, vazio = NOW
+    valid-until: ${COUPON_LANCAMENTO_VALID_UNTIL:}  # ISO format, vazio = sem expiração
+    active: ${COUPON_LANCAMENTO_ACTIVE:true}

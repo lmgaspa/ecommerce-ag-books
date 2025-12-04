@@ -1,5 +1,6 @@
 package com.luizgasparetto.backend.monolito.services.coupon
 
+import com.luizgasparetto.backend.monolito.dto.card.CardCartItemDto
 import com.luizgasparetto.backend.monolito.exceptions.CouponValidationException
 import com.luizgasparetto.backend.monolito.models.coupon.Coupon
 import com.luizgasparetto.backend.monolito.models.coupon.DiscountType
@@ -27,12 +28,15 @@ class CouponService(
     data class CouponValidationRequest(
         val code: String,
         val orderTotal: BigDecimal,
-        val userEmail: String? = null
+        val userEmail: String? = null,
+        val cartItems: List<CardCartItemDto>? = null
     )
 
     fun validateCoupon(request: CouponValidationRequest): CouponValidationResult {
         log.info("Validating coupon: code={}, orderTotal={}", request.code, request.orderTotal)
 
+        // Buscar cupom no banco (aceita variações case-insensitive)
+        // O cupom LANCAMENTO funciona igual ao BONUS - sem validação especial de itens
         val coupon = couponRepository.findActiveByCodeIgnoreCase(request.code)
             .orElse(null) ?: return CouponValidationResult(
                 valid = false,
@@ -150,4 +154,5 @@ class CouponService(
 
         return couponRepository.save(coupon)
     }
+
 }

@@ -2,7 +2,7 @@ package com.luizgasparetto.backend.monolito.services.card
 
 import com.luizgasparetto.backend.monolito.models.order.OrderStatus
 import com.luizgasparetto.backend.monolito.repositories.OrderRepository
-import com.luizgasparetto.backend.monolito.services.email.CardEmailService
+import com.luizgasparetto.backend.monolito.services.email.card.CardEmailService
 import com.luizgasparetto.backend.monolito.services.order.OrderEventsPublisher
 import com.luizgasparetto.backend.monolito.services.payout.card.PayoutCardEmailService
 import org.slf4j.LoggerFactory
@@ -19,9 +19,13 @@ class CardPaymentProcessor(
 ) {
     private val log = LoggerFactory.getLogger(CardPaymentProcessor::class.java)
     private val cardPaid = setOf("PAID","APPROVED","CAPTURED","CONFIRMED")
+    private val cardDeclined = setOf("DECLINED","REJECTED","FAILED","CANCELLED","CANCELED","UNPAID","REFUSED")
 
     fun isCardPaidStatus(status: String?): Boolean =
         status != null && cardPaid.contains(status.uppercase())
+    
+    fun isCardDeclinedStatus(status: String?): Boolean =
+        status != null && cardDeclined.contains(status.uppercase())
 
     @Transactional
     fun markPaidIfNeededByChargeId(chargeId: String): Boolean {

@@ -8,10 +8,13 @@ import com.luizgasparetto.backend.monolito.models.payout.PayoutEmailType
 import com.luizgasparetto.backend.monolito.repositories.OrderRepository
 import com.luizgasparetto.backend.monolito.repositories.PayoutEmailRepository
 import com.luizgasparetto.backend.monolito.repositories.WebhookEventRepository
+import com.luizgasparetto.backend.monolito.models.order.OrderStatus
 import com.luizgasparetto.backend.monolito.services.card.CardPaymentProcessor
+import com.luizgasparetto.backend.monolito.services.email.order.OrderStatusEmailService
 import com.luizgasparetto.backend.monolito.services.payout.card.PayoutCardEmailService
 import org.slf4j.LoggerFactory
 import org.springframework.http.ResponseEntity
+import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
@@ -27,6 +30,7 @@ class CardEfiWebhookController(
     private val processor: CardPaymentProcessor,
     private val webhookRepo: WebhookEventRepository,
     private val payoutEmailRepo: PayoutEmailRepository,
+    private val orderStatusEmailService: OrderStatusEmailService,
     // 🔌 Injeção do orquestrador (mantém OCP; decisão de "quando" chamar fica fora do controller)
     private val payoutTrigger: PaymentTriggerService,
     private val payoutCardEmailService: PayoutCardEmailService
@@ -34,6 +38,7 @@ class CardEfiWebhookController(
     private val log = LoggerFactory.getLogger(CardEfiWebhookController::class.java)
 
     @PostMapping("/card", consumes = ["application/json"])
+    @Transactional
     fun handle(@RequestBody rawBody: String): ResponseEntity<String> {
         log.info("EFI CARD WEBHOOK RAW={}", rawBody.take(4000))
 
@@ -99,7 +104,46 @@ class CardEfiWebhookController(
         }
 
         val paid = processor.isCardPaidStatus(status)
-        val applied = if (paid) processor.markPaidIfNeededByChargeId(chargeId) else false
+        val declined = processor.isCardDeclinedStatus(status)
+        
+        // Atualiza status do pedido baseado no status do webhook
+        val orderStatus = OrderStatus.fromEfi(status)
+        val previousStatus = order.status
+        val wasPaid = order.paid
+        
+        // Atualiza status do pedido se necessário (mesmo que não seja pago ainda)
+        if (order.status != orderStatus && !orderStatus.isFinal() || orderStatus.isPaidLike()) {
+            order.status = orderStatus
+            orders.save(order)
+            log.info("CARD WEBHOOK: status atualizado orderId={}, previousStatus={}, newStatus={}", order.id, previousStatus, orderStatus)
+        }
+        
+        // Processa pagamento aprovado
+        val applied = if (paid) {
+            processor.markPaidIfNeededByChargeId(chargeId)
+        } else {
+            false
+        }
+        
+        // Processa pagamento rejeitado
+        if (declined && !wasPaid && order.id != null) {
+            // Atualiza status para DECLINED se ainda não estava pago
+            if (order.status != OrderStatus.DECLINED) {
+                order.status = OrderStatus.DECLINED
+                orders.save(order)
+            }
+            
+            // Envia email de pagamento rejeitado
+            runCatching {
+                orderStatusEmailService.sendFailedEmail(
+                    order = order,
+                    reason = "Pagamento recusado pela operadora. Status: $status"
+                )
+                log.info("CARD WEBHOOK: email de pagamento rejeitado enviado para order #{}", order.id)
+            }.onFailure { e ->
+                log.error("CARD WEBHOOK: falha ao enviar email de pagamento rejeitado (orderId={}, chargeId={}): {}", order.id, chargeId, e.message)
+            }
+        }
 
         // 🔔 EMAIL IMEDIATO (CARTÃO): informa sobre repasse D+32
         // Nota: O email já é enviado no CardPaymentProcessor quando o pagamento é confirmado.
@@ -132,10 +176,10 @@ class CardEfiWebhookController(
         }
 
         log.info(
-            "CARD WEBHOOK: chargeId={}, status={}, paidLike={}, applied={}, orderId={}",
-            chargeId, status, paid, applied, order.id
+            "CARD WEBHOOK: chargeId={}, status={}, paidLike={}, declined={}, applied={}, orderId={}, orderStatus={}",
+            chargeId, status, paid, declined, applied, order.id, order.status
         )
-        return ResponseEntity.ok("status=$status; applied=$applied")
+        return ResponseEntity.ok("status=$status; applied=$applied; declined=$declined")
     }
 
     private fun mask(pixKey: String): String {

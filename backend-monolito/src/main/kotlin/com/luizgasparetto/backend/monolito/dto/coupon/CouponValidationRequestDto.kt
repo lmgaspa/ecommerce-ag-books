@@ -1,6 +1,7 @@
 package com.luizgasparetto.backend.monolito.dto.coupon
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties
+import com.luizgasparetto.backend.monolito.dto.card.CardCartItemDto
 import jakarta.validation.constraints.DecimalMin
 import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.NotNull
@@ -15,5 +16,7 @@ data class CouponValidationRequestDto(
     @field:DecimalMin(value = "0.0", inclusive = false, message = "Total do pedido deve ser maior que zero")
     val orderTotal: BigDecimal,
 
-    val userEmail: String? = null
+    val userEmail: String? = null,
+    
+    val cartItems: List<CardCartItemDto>? = null
 )

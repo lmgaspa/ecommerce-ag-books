@@ -2,7 +2,7 @@ package com.luizgasparetto.backend.monolito.services.pix
 
 import com.luizgasparetto.backend.monolito.models.order.OrderStatus
 import com.luizgasparetto.backend.monolito.repositories.OrderRepository
-import com.luizgasparetto.backend.monolito.services.email.PixEmailService
+import com.luizgasparetto.backend.monolito.services.email.pix.PixEmailService
 import com.luizgasparetto.backend.monolito.services.order.OrderEventsPublisher
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service

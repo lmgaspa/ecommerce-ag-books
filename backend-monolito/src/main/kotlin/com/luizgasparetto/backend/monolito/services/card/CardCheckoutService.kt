@@ -12,6 +12,7 @@ import com.luizgasparetto.backend.monolito.repositories.OrderCouponRepository
 import com.luizgasparetto.backend.monolito.repositories.OrderRepository
 import com.luizgasparetto.backend.monolito.services.book.BookService
 import com.luizgasparetto.backend.monolito.services.coupon.CouponService
+import com.luizgasparetto.backend.monolito.services.email.order.OrderStatusEmailService
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
@@ -30,6 +31,7 @@ class CardCheckoutService(
     private val processor: CardPaymentProcessor,
     private val couponService: CouponService,
     private val orderCouponRepository: OrderCouponRepository,
+    private val orderStatusEmailService: OrderStatusEmailService,
     private val cardWatcher: CardWatcher? = null
 ) {
     private val log = LoggerFactory.getLogger(CardCheckoutService::class.java)
@@ -67,6 +69,13 @@ class CardCheckoutService(
             it.installments = request.installments.coerceAtLeast(1)
         }
         reserveItemsTx(order, reserveTtlSeconds)
+
+        // 1.1) Envia email de confirmação de pedido criado (PENDING/WAITING)
+        runCatching {
+            orderStatusEmailService.sendPendingEmail(order)
+        }.onFailure { e ->
+            log.warn("Falha ao enviar email de pedido criado (orderId={}): {}", order.id, e.message)
+        }
 
         // 2) distribuir desconto entre itens e frete para alinhar com finalTotal
         val distributionResult = DiscountDistributionHelper.distributeDiscount(
@@ -183,7 +192,8 @@ class CardCheckoutService(
             CouponService.CouponValidationRequest(
                 code = request.couponCode,
                 orderTotal = originalTotal,
-                userEmail = request.email
+                userEmail = request.email,
+                cartItems = request.cartItems
             )
         )
 

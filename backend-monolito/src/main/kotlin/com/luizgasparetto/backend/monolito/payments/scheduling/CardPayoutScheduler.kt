@@ -17,8 +17,8 @@ import java.time.OffsetDateTime
 class CardPayoutScheduler(
     private val jdbc: NamedParameterJdbcTemplate,
     private val payoutTrigger: PaymentTriggerService,
-    @Value("\${payout.delay.cardDays:32}") private val cardDays: Int,
-    @Value("\${payout.scheduler.card.batchSize:100}") private val batchSize: Int
+    @Value("\${efi.card.payout.delay.cardDays:32}") private val cardDays: Int,
+    @Value("\${efi.card.payout.scheduler.card.batchSize:100}") private val batchSize: Int
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -26,7 +26,7 @@ class CardPayoutScheduler(
      * CRON configurável (default: 03:17 diariamente).
      * Use timezone da JVM. Se quiser forçar: @Scheduled(cron = "...", zone = "America/Bahia")
      */
-    @Scheduled(cron = "\${payout.scheduler.card.cron:0 17 3 * * *}")
+    @Scheduled(cron = "\${efi.card.payout.scheduler.card.cron:0 17 3 * * *}")
     fun runDailyBatch() {
         val startedAt = OffsetDateTime.now()
         log.info("CARD-PAYOUT-SCHED start at={} cardDays={} batchSize={}", startedAt, cardDays, batchSize)

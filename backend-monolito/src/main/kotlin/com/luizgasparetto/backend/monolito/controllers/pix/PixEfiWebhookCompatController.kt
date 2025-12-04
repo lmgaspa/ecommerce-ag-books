@@ -7,7 +7,7 @@ import com.luizgasparetto.backend.monolito.models.webhook.WebhookEvent
 import com.luizgasparetto.backend.monolito.payments.web.PaymentTriggerService
 import com.luizgasparetto.backend.monolito.repositories.OrderRepository
 import com.luizgasparetto.backend.monolito.repositories.WebhookEventRepository
-import com.luizgasparetto.backend.monolito.services.email.PixEmailService
+import com.luizgasparetto.backend.monolito.services.email.pix.PixEmailService
 import com.luizgasparetto.backend.monolito.services.order.OrderEventsPublisher
 import com.luizgasparetto.backend.monolito.payments.web.EfiPixSendWebhookController
 import org.slf4j.LoggerFactory

@@ -25,7 +25,8 @@ class CouponController(
             CouponService.CouponValidationRequest(
                 code = request.code,
                 orderTotal = request.orderTotal,
-                userEmail = request.userEmail
+                userEmail = request.userEmail,
+                cartItems = request.cartItems
             )
         )
 

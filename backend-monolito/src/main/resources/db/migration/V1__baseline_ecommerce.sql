@@ -105,7 +105,7 @@ END;
 $$;
 
 -- =====================================================================
--- 3) ORDERS e ORDER_ITEMS
+-- 3) ORDERS, ORDER_ITEMS e ORDER_COUPONS
 -- =====================================================================
 
 CREATE TABLE IF NOT EXISTS orders (
@@ -118,6 +118,7 @@ CREATE TABLE IF NOT EXISTS orders (
   cpf                VARCHAR(255) NOT NULL,
   number             VARCHAR(255) NOT NULL,
   complement         VARCHAR(255),
+
   district           VARCHAR(255) NOT NULL,
 
   -- Endereço
@@ -186,10 +187,6 @@ CREATE TABLE IF NOT EXISTS order_items (
     FOREIGN KEY (order_id) REFERENCES orders(id)
 );
 
--- =====================================================================
--- 4) ORDER_COUPONS
--- =====================================================================
-
 CREATE TABLE IF NOT EXISTS order_coupons (
   id              BIGSERIAL PRIMARY KEY,
   order_id        BIGINT NOT NULL,
@@ -209,7 +206,7 @@ CREATE INDEX IF NOT EXISTS idx_order_coupons_order_id  ON order_coupons(order_id
 CREATE INDEX IF NOT EXISTS idx_order_coupons_coupon_id ON order_coupons(coupon_id);
 
 -- =====================================================================
--- 5) PAYMENT AUTHOR REGISTRY / ACCOUNTS / SITE AUTHOR
+-- 4) PAYMENT AUTHOR REGISTRY / ACCOUNTS / SITE AUTHOR
 -- =====================================================================
 
 CREATE TABLE IF NOT EXISTS payment_author_registry (
@@ -277,7 +274,7 @@ END;
 $$;
 
 -- =====================================================================
--- 6) PAYMENT PAYOUTS + EMAIL
+-- 5) PAYMENT PAYOUTS + EMAIL
 -- =====================================================================
 
 CREATE TABLE IF NOT EXISTS payment_payouts (
@@ -343,8 +340,29 @@ CREATE INDEX IF NOT EXISTS idx_payout_email_status    ON payout_email(status);
 CREATE INDEX IF NOT EXISTS idx_payout_email_sent_at   ON payout_email(sent_at DESC);
 CREATE INDEX IF NOT EXISTS idx_payout_email_type      ON payout_email(email_type);
 
+CREATE TABLE IF NOT EXISTS order_email (
+  id            BIGSERIAL PRIMARY KEY,
+  order_id      BIGINT NOT NULL,
+  to_email      VARCHAR(255) NOT NULL,
+  email_type    VARCHAR(40)  NOT NULL,
+  sent_at       TIMESTAMPTZ  NOT NULL DEFAULT now(),
+  status        VARCHAR(20)  NOT NULL,
+  error_message TEXT,
+  CONSTRAINT chk_order_email_status
+    CHECK (status IN ('SENT','FAILED')),
+  CONSTRAINT chk_order_email_type
+    CHECK (email_type IN ('PENDING','PAID','FAILED','CANCELED','REFUNDED','EXPIRED')),
+  CONSTRAINT fk_order_email_order_id
+    FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_order_email_order_id  ON order_email(order_id);
+CREATE INDEX IF NOT EXISTS idx_order_email_status    ON order_email(status);
+CREATE INDEX IF NOT EXISTS idx_order_email_sent_at   ON order_email(sent_at DESC);
+CREATE INDEX IF NOT EXISTS idx_order_email_type      ON order_email(email_type);
+
 -- =====================================================================
--- 7) WEBHOOKS, PAYMENT_WEBHOOKS, OUTBOX
+-- 6) WEBHOOKS, PAYMENT_WEBHOOKS, OUTBOX
 -- =====================================================================
 
 CREATE TABLE IF NOT EXISTS webhook_events (
@@ -391,7 +409,7 @@ CREATE INDEX IF NOT EXISTS idx_outbox_events_status_next_attempt
   ON outbox_events(status, next_attempt_at);
 
 -- =====================================================================
--- 8) COOKIE CONSENTS
+-- 7) COOKIE CONSENTS
 -- =====================================================================
 
 CREATE TABLE IF NOT EXISTS cookie_consents (
@@ -399,7 +417,7 @@ CREATE TABLE IF NOT EXISTS cookie_consents (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   ip_hash    TEXT        NOT NULL,
   user_agent TEXT        NOT NULL,
-  prefs      JSONB       NOT NULL,
+  prefs      JSONB        NOT NULL,
   source     TEXT        NOT NULL
 );
 
@@ -407,7 +425,7 @@ CREATE INDEX IF NOT EXISTS idx_cookie_consents_created_at
   ON cookie_consents(created_at);
 
 -- =====================================================================
--- 9) PAYMENT_BOOK_AUTHORS (módulo de repasse)
+-- 8) PAYMENT_BOOK_AUTHORS (módulo de repasse)
 -- =====================================================================
 
 CREATE TABLE IF NOT EXISTS payment_book_authors (
@@ -422,7 +440,7 @@ CREATE TABLE IF NOT EXISTS payment_book_authors (
 CREATE INDEX IF NOT EXISTS idx_pba_author_id ON payment_book_authors(author_id);
 
 -- =====================================================================
--- 10) SEED BÁSICO DO AUTOR DO SITE (id = 1)
+-- 9) SEED BÁSICO DO AUTOR DO SITE (id = 1)
 -- =====================================================================
 
 -- Usa placeholders do Flyway:
@@ -457,4 +475,5 @@ ON CONFLICT (id) DO UPDATE
 
 -- Garante que só o registro 1 está ativo
 UPDATE payment_site_author
-SET active = (id = 1);
+SET active = (id = 1)
+WHERE id = 1;

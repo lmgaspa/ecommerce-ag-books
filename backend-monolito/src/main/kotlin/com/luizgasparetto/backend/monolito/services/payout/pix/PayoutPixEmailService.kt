@@ -28,17 +28,30 @@ class PayoutPixEmailService(
         extraNote: String? = null,
         to: String? = null
     ) {
-        confirmedSender.send(
-            orderId = orderId,
-            amount = amount,
-            payeePixKey = payeePixKey,
-            idEnvio = idEnvio,
-            endToEndId = endToEndId,
-            txid = txid,
-            efetivadoEm = efetivadoEm,
-            extraNote = extraNote,
-            to = to
-        )
+        if (to != null) {
+            confirmedSender.send(
+                orderId = orderId,
+                amount = amount,
+                payeePixKey = payeePixKey,
+                idEnvio = idEnvio,
+                endToEndId = endToEndId,
+                txid = txid,
+                efetivadoEm = efetivadoEm,
+                extraNote = extraNote,
+                to = to
+            )
+        } else {
+            confirmedSender.send(
+                orderId = orderId,
+                amount = amount,
+                payeePixKey = payeePixKey,
+                idEnvio = idEnvio,
+                endToEndId = endToEndId,
+                txid = txid,
+                efetivadoEm = efetivadoEm,
+                extraNote = extraNote
+            )
+        }
     }
 
     /**
@@ -57,18 +70,33 @@ class PayoutPixEmailService(
         triedAt: OffsetDateTime? = null,
         extraNote: String? = null
     ) {
-        failedSender.send(
-            orderId = orderId,
-            amount = amount,
-            payeePixKey = payeePixKey,
-            idEnvio = idEnvio,
-            errorCode = errorCode,
-            errorMsg = errorMsg,
-            to = to,
-            txid = txid,
-            endToEndId = endToEndId,
-            triedAt = triedAt,
-            extraNote = extraNote
-        )
+        if (to != null) {
+            failedSender.send(
+                orderId = orderId,
+                amount = amount,
+                payeePixKey = payeePixKey,
+                idEnvio = idEnvio,
+                errorCode = errorCode,
+                errorMsg = errorMsg,
+                to = to,
+                txid = txid,
+                endToEndId = endToEndId,
+                triedAt = triedAt,
+                extraNote = extraNote
+            )
+        } else {
+            failedSender.send(
+                orderId = orderId,
+                amount = amount,
+                payeePixKey = payeePixKey,
+                idEnvio = idEnvio,
+                errorCode = errorCode,
+                errorMsg = errorMsg,
+                txid = txid,
+                endToEndId = endToEndId,
+                triedAt = triedAt,
+                extraNote = extraNote
+            )
+        }
     }
 }
