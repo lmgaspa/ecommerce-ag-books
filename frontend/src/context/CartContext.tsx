@@ -4,6 +4,9 @@ import type { ReactNode } from "react";
 import type { CartItem, CartContextType } from "./CartTypes";
 import { cookieStorage } from "../utils/cookieUtils";
 
+// Re-export types for convenience
+export type { CartItem, CartContextType } from "./CartTypes";
+
 export const CartContext = createContext<CartContextType | undefined>(
   undefined
 );

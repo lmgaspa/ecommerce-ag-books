@@ -49,7 +49,11 @@ export const useCoupon = () => {
     };
   }, []);
 
-  const applyCoupon = async (code: string, orderTotal: number): Promise<{ success: boolean; discountAmount?: number }> => {
+  const applyCoupon = async (
+    code: string, 
+    orderTotal: number, 
+    cartItems?: Array<{ id: string; title: string; price: number; quantity: number; imageUrl: string }>
+  ): Promise<{ success: boolean; discountAmount?: number }> => {
     if (!code.trim()) {
       alert("Digite um código de cupom.");
       return { success: false };
@@ -65,7 +69,8 @@ export const useCoupon = () => {
       }>("/coupons/validate", {
         code: code.trim(),
         orderTotal: orderTotal,
-        userEmail: null
+        userEmail: null,
+        cartItems: cartItems || null
       });
 
       if (result.valid) {
@@ -97,41 +102,72 @@ export const useCoupon = () => {
     }
   };
 
+  /**
+   * Normaliza código de cupom removendo acentos e convertendo para maiúsculas
+   * Aceita: "lancamento", "LANCAMENTO", "lançamento", "LANÇAMENTO" -> todos viram "LANCAMENTO"
+   */
+  const normalizeCouponCode = (code: string): string => {
+    return code
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toUpperCase()
+      .trim();
+  };
+
   const applyCouponLocal = (code: string): { success: boolean; discountAmount?: number } => {
-    // Verificar se as variáveis de ambiente estão configuradas
+    const normalizedInput = normalizeCouponCode(code);
+    
+    // Verificar cupom genérico (BONUS)
     const couponCode = import.meta.env.VITE_COUPON_CODE;
     const discountValue = import.meta.env.VITE_COUPON_DISCOUNT_VALUE;
     
-    if (!couponCode || !discountValue) {
-      alert("Sistema de cupons não configurado. Entre em contato com o suporte.");
+    // Verificar cupom de lançamento
+    const lancamentoCode = import.meta.env.VITE_COUPON_LANCAMENTO_CODE;
+    const lancamentoDiscountValue = import.meta.env.VITE_COUPON_LANCAMENTO_DISCOUNT_VALUE;
+    
+    let validCoupon: string | null = null;
+    let fixedDiscount: number | null = null;
+    
+    // Verificar se é o cupom genérico
+    if (couponCode && discountValue) {
+      const normalizedGeneric = normalizeCouponCode(couponCode);
+      if (normalizedInput === normalizedGeneric) {
+        validCoupon = normalizedGeneric;
+        fixedDiscount = Number(discountValue);
+      }
+    }
+    
+    // Verificar se é o cupom de lançamento
+    if (!validCoupon && lancamentoCode && lancamentoDiscountValue) {
+      const normalizedLancamento = normalizeCouponCode(lancamentoCode);
+      if (normalizedInput === normalizedLancamento) {
+        validCoupon = normalizedLancamento;
+        fixedDiscount = Number(lancamentoDiscountValue);
+      }
+    }
+    
+    if (!validCoupon || fixedDiscount === null) {
+      alert("Cupom inválido.");
       return { success: false };
     }
 
-    const validCoupon = couponCode.toUpperCase();
-    const FIXED_DISCOUNT = Number(discountValue);
-
-    if (isNaN(FIXED_DISCOUNT) || FIXED_DISCOUNT <= 0) {
+    if (isNaN(fixedDiscount) || fixedDiscount <= 0) {
       alert("Configuração de desconto inválida. Entre em contato com o suporte.");
       return { success: false };
     }
 
-    if (code.trim().toUpperCase() === validCoupon) {
-      const newState = {
-        code: code.trim().toUpperCase(),
-        discount: FIXED_DISCOUNT,
-        isValid: true,
-      };
-      
-      setCouponState(newState);
-      setInputValue(code.trim().toUpperCase());
-      sessionStorage.setItem(COUPON_STORAGE_KEY, JSON.stringify(newState));
-      
-      window.dispatchEvent(new CustomEvent('couponChanged'));
-      return { success: true, discountAmount: FIXED_DISCOUNT };
-    } else {
-      alert("Cupom inválido.");
-      return { success: false };
-    }
+    const newState = {
+      code: validCoupon,
+      discount: fixedDiscount,
+      isValid: true,
+    };
+    
+    setCouponState(newState);
+    setInputValue(validCoupon);
+    sessionStorage.setItem(COUPON_STORAGE_KEY, JSON.stringify(newState));
+    
+    window.dispatchEvent(new CustomEvent('couponChanged'));
+    return { success: true, discountAmount: fixedDiscount };
   };
 
   const clearCoupon = () => {

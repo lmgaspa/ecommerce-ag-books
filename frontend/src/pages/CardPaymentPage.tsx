@@ -81,6 +81,7 @@ export default function CardPaymentPage() {
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [checkoutResponse, setCheckoutResponse] = useState<CardCheckoutResponse | null>(null);
+  const [paymentSuccess, setPaymentSuccess] = useState(false);
 
   // Custom Hooks
   const { formatCardNumber, formatMonth, formatYear, formatCvv, toYYYY } = useCardFormatting(brand);
@@ -93,12 +94,13 @@ export default function CardPaymentPage() {
     checkoutResponse?.securityWarningAt ?? 60
   );
 
-  // Guard: redirect if cart invalid
+  // Guard: redirect if cart invalid (but not if payment was successful)
   useEffect(() => {
+    if (paymentSuccess) return; // Don't redirect if payment was successful
     if (!Array.isArray(cart) || cart.length === 0 || total <= 0) {
       navigate("/checkout");
     }
-  }, [cart, total, navigate]);
+  }, [cart, total, navigate, paymentSuccess]);
 
   // Warn if Efí script blocked
   useEffect(() => {
@@ -211,6 +213,7 @@ export default function CardPaymentPage() {
       const hasErrorStatus = data.status ? errorStatuses.includes(String(data.status).toUpperCase()) : false;
 
       if (data.success && data.orderId && !hasErrorStatus) {
+        setPaymentSuccess(true); // Set flag before clearing cart to prevent redirect
         cartContext?.clearCart?.() ?? cookieStorage.remove("cart");
         if (couponCode) clearCoupon();
 
@@ -236,6 +239,17 @@ export default function CardPaymentPage() {
         return;
       }
 
+      // Handle PENDING/PROCESSING statuses - redirect to confirmation with "awaiting approval" message
+      const pendingStatuses = ["PENDING", "PROCESSING"];
+      const isPending = data.status ? pendingStatuses.includes(String(data.status).toUpperCase()) : false;
+
+      if (data.orderId && isPending) {
+        setPaymentSuccess(true); // Prevent redirect on unmount
+        navigate(`/pedido-confirmado?orderId=${data.orderId}&payment=card&paid=false`);
+        return;
+      }
+
+      // Handle other non-paid statuses as errors
       if (data.orderId && !isPaid && data.status) {
         setErrorMsg(data.message || "Pagamento não foi aprovado. Tente novamente.");
         return;

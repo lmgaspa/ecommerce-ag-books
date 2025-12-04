@@ -27,4 +27,3 @@ export default function ReviewPurchaseButton({ className = "" }: ReviewPurchaseB
     </div>
   );
 }
-

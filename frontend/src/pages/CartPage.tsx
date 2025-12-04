@@ -98,7 +98,16 @@ const CartPage = () => {
   };
 
   const handleApplyCoupon = async (): Promise<{ success: boolean; discountAmount?: number }> => {
-    const result = await applyCoupon(inputValue, subtotal);
+    // Converter cartItems para o formato esperado pelo backend
+    const cartItemsForValidation = cartItems.map(item => ({
+      id: item.id,
+      title: item.title,
+      price: item.price,
+      quantity: item.quantity,
+      imageUrl: item.imageUrl
+    }));
+    
+    const result = await applyCoupon(inputValue, subtotal, cartItemsForValidation);
     if (result.success && result.discountAmount !== undefined) {
       // Usar o valor retornado pela API, mas limitado a R$ 15
       const maxDiscount = 15.00;
