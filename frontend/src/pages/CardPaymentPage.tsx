@@ -35,6 +35,10 @@ interface CardCheckoutResponse {
   ttlSeconds?: number | null;
   warningAt?: number | null;
   securityWarningAt?: number | null;
+
+  // extras opcionais retornados pelo backend em erros
+  code?: string;
+  gatewayCode?: string;
 }
 
 type BrandUI = CardBrand;
@@ -149,7 +153,7 @@ export default function CardPaymentPage() {
   const total = subtotal + shipping - desconto;
 
   // Valida se o cupom ainda está válido para exibição visual
-  const finalCouponCode = (isCouponValid && couponCode) ? couponCode : null;
+  const finalCouponCode = isCouponValid && couponCode ? couponCode : null;
   const finalDiscount = finalCouponCode ? desconto : 0;
 
   // Guard: if cart empty or total invalid, go back to checkout
@@ -358,10 +362,8 @@ export default function CardPaymentPage() {
     if (installments <= 1) return total;
     // Se temos uma opção selecionada da API, mas o total mudou, recalcula baseado no total atual
     if (selectedInstallment) {
-      // Recalcula proporcionalmente se o total mudou
-      const apiTotal = selectedInstallment.value / 100 * installments;
+      const apiTotal = (selectedInstallment.value / 100) * selectedInstallment.installment;
       if (Math.abs(apiTotal - total) > 0.01) {
-        // Total mudou (desconto foi aplicado), recalcula baseado no total atual
         return Math.round((total / installments) * 100) / 100;
       }
       return selectedInstallment.value / 100;
@@ -432,28 +434,23 @@ export default function CardPaymentPage() {
         ? paidStatuses.includes(String(data.status).toUpperCase())
         : false;
 
-      // Se teve sucesso e tem orderId, redireciona para PedidoConfirmado
-      // (o backend pode processar pagamentos com cupom de forma diferente e não retornar status)
-      // Só não redireciona se o status indicar explicitamente um erro (ex: "FAILED", "REJECTED")
       const errorStatuses = ["FAILED", "REJECTED", "CANCELLED", "CANCELED"];
       const hasErrorStatus = data.status
         ? errorStatuses.includes(String(data.status).toUpperCase())
         : false;
 
       if (data.success && data.orderId && !hasErrorStatus) {
-        // ✅ A partir daqui é COMPRA CONCLUÍDA: podemos limpar o carrinho e o cupom
+        // ✅ COMPRA CONCLUÍDA
         if (cartContext?.clearCart) {
           cartContext.clearCart();
         } else {
           cookieStorage.remove("cart");
         }
 
-        // Limpa o cupom após compra bem-sucedida (idempotência)
         if (couponCode) {
           clearCoupon();
         }
 
-        // Snapshot para PedidoConfirmado disparar analytics.purchase
         const purchasePayload = {
           transaction_id: String(data.orderId),
           value: Number(total),
@@ -468,14 +465,12 @@ export default function CardPaymentPage() {
           JSON.stringify(purchasePayload)
         );
 
-        // Vai para a tela de confirmação, marcada como paga
         navigate(
           `/pedido-confirmado?orderId=${data.orderId}&payment=card&paid=true`
         );
         return;
       }
 
-      // Se não teve sucesso ou não veio orderId, mostra erro
       if (!data.success || !data.orderId) {
         setErrorMsg(
           data.message ||
@@ -484,7 +479,6 @@ export default function CardPaymentPage() {
         return;
       }
 
-      // Se tem orderId mas status não está aprovado, mostra mensagem de aguardando
       if (data.orderId && !isPaid && data.status) {
         setErrorMsg(
           data.message ||
@@ -492,9 +486,46 @@ export default function CardPaymentPage() {
         );
         return;
       }
-    } catch (e) {
-      setErrorMsg(e instanceof Error ? e.message : "Falha no pagamento.");
-      console.error(e);
+    } catch (err: any) {
+      console.error("Erro no pagamento com cartão:", err);
+
+      // Tenta extrair erro estruturado vindo do backend (via apiPost/Axios)
+      const resp = (err as any)?.response;
+      const data = resp?.data as
+        | { code?: string; message?: string; gatewayCode?: string }
+        | undefined;
+
+      if (data && typeof data === "object") {
+        if (data.code === "PAYMENT_GATEWAY_ERROR") {
+          setErrorMsg(
+            data.message ||
+              "Não foi possível comunicar com o processador de cartão. Tente novamente em instantes."
+          );
+          return;
+        }
+
+        if (data.code === "OUT_OF_STOCK") {
+          setErrorMsg(
+            data.message ||
+              "Alguns itens ficaram indisponíveis durante o pagamento. Atualize a página e tente novamente."
+          );
+          return;
+        }
+
+        if (data.message) {
+          setErrorMsg(data.message);
+          return;
+        }
+      }
+
+      // Fallbacks genéricos
+      if (err instanceof Error && err.message) {
+        setErrorMsg(err.message);
+      } else {
+        setErrorMsg(
+          "Não foi possível processar o pagamento. Tente novamente em instantes."
+        );
+      }
     } finally {
       setLoading(false);
     }
@@ -680,9 +711,10 @@ export default function CardPaymentPage() {
           ? installmentOptions.map((opt) => {
               // Recalcula o valor por parcela baseado no total atual (com desconto)
               const apiTotal = (opt.value / 100) * opt.installment;
-              const adjustedValue = Math.abs(apiTotal - total) > 0.01 
-                ? total / opt.installment 
-                : opt.value / 100;
+              const adjustedValue =
+                Math.abs(apiTotal - total) > 0.01
+                  ? total / opt.installment
+                  : opt.value / 100;
               return (
                 <option value={opt.installment} key={opt.installment}>
                   {opt.installment}x de R$ {adjustedValue.toFixed(2)}{" "}
@@ -726,7 +758,8 @@ export default function CardPaymentPage() {
           ? "Pagamento Expirado"
           : "Pagar com Cartão"}
       </button>
-        {/* 🔁 Botão global reutilizável */}
+
+      {/* 🔁 Botão global reutilizável */}
       <ReviewPurchaseButton />
     </div>
   );
