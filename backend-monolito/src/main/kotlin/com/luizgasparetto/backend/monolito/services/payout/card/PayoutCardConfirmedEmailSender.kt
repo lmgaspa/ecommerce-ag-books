@@ -1,11 +1,12 @@
 package com.luizgasparetto.backend.monolito.services.payout.card
 
-import com.luizgasparetto.backend.monolito.config.payments.EfiPayoutProps
+import com.luizgasparetto.backend.monolito.config.payments.EfiCardPayoutProps
 import com.luizgasparetto.backend.monolito.models.payout.PayoutEmailStatus
 import com.luizgasparetto.backend.monolito.models.payout.PayoutEmailType
 import com.luizgasparetto.backend.monolito.repositories.OrderRepository
 import com.luizgasparetto.backend.monolito.repositories.PayoutEmailRepository
 import com.luizgasparetto.backend.monolito.services.email.common.EmailFooter
+import com.luizgasparetto.backend.monolito.services.email.payout.DiscountDetailsHelper
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate
 import org.springframework.mail.javamail.JavaMailSender
@@ -22,15 +23,18 @@ class PayoutCardConfirmedEmailSender(
     orderRepository: OrderRepository,
     payoutEmailRepository: PayoutEmailRepository,
     jdbc: NamedParameterJdbcTemplate,
-    payoutProps: EfiPayoutProps,
+        payoutProps: EfiCardPayoutProps,
     @Value("\${email.author}") authorEmail: String,
     @Value("\${application.brand.name:Agenor Gasparetto - E-Commerce}") brandName: String,
     @Value("\${mail.from:}") configuredFrom: String,
     @Value("\${mail.logo.url:https://www.andescoresoftware.com.br/AndesCore.jpg}") logoUrl: String,
     @Value("\${application.timezone:America/Bahia}") appTz: String,
-    @Value("\${efi.payout.favored-key:}") favoredKeyFromConfig: String,
-    @Value("\${efi.card.sandbox:false}") sandbox: Boolean,
-    @Value("\${mail.host:}") mailHost: String
+        @Value("\${efi.payout.favored-key:}") favoredKeyFromConfig: String,
+        @Value("\${efi.card.sandbox:false}") sandbox: Boolean,
+        @Value("\${mail.host:}") mailHost: String,
+        @Value("\${efi.card.payout.real-fee-percent-1x:3.49}") private val efiRealFeePercent1x: Double,
+        @Value("\${efi.card.payout.real-fee-percent-2to6x:3.79}") private val efiRealFeePercent2to6x: Double,
+        @Value("\${efi.card.payout.real-fee-percent-7to12x:4.39}") private val efiRealFeePercent7to12x: Double
 ) : PayoutCardEmailBase(
     mailSender, orderRepository, payoutEmailRepository, jdbc, payoutProps,
     authorEmail, brandName, configuredFrom, logoUrl, appTz, favoredKeyFromConfig, sandbox, mailHost
@@ -62,9 +66,24 @@ class PayoutCardConfirmedEmailSender(
         val order = orderRepository.findById(orderId).orElse(null)
         val amountGross = order?.total ?: amount
         
+        // Determina a tarifa real da Efí Bank baseada no número de parcelas
+        val installments = order?.installments ?: 1
+        val efiRealFeePercent = when {
+            installments == 1 -> efiRealFeePercent1x
+            installments in 2..6 -> efiRealFeePercent2to6x
+            else -> efiRealFeePercent7to12x
+        }
+        val installmentsLabel = if (installments > 1) "${installments}x" else null
+        
         // Calcula os detalhes do desconto usando o valor bruto
-        val discountDetails = calculateDiscountDetails(amountGross)
-        val discountBlock = buildDiscountDetailsBlock(discountDetails)
+        val discountDetails = DiscountDetailsHelper.calculateDiscountDetails(amountGross, payoutProps)
+        val discountBlock = DiscountDetailsHelper.buildDiscountDetailsBlock(
+            details = discountDetails,
+            payoutProps = payoutProps,
+            efiRealFeePercent = efiRealFeePercent,
+            paymentTypeLabel = "Cartão de Crédito",
+            installmentsInfo = installmentsLabel
+        )
 
         val htmlContent = """
             <!DOCTYPE html>

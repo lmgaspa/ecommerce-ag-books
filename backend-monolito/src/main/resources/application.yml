@@ -95,16 +95,28 @@ efi:
     cert-path: classpath:producao-ec-agenor.p12
     cert-password: ""      # preencha se houver senha
     sandbox: false
+    payout:
+      real-fee-percent: ${EFI_PIX_REAL_FEE_PERCENT:1.19}
+      fee-percent: ${EFI_PAYOUT_PIX_FEE_PERCENT:1.19}
+      fee-fixed: ${EFI_PAYOUT_PIX_FEE_FIXED:0}
+      margin-percent: ${EFI_PAYOUT_PIX_MARGIN_PERCENT:0.5}
+      margin-fixed: ${EFI_PAYOUT_PIX_MARGIN_FIXED:0}
+      min-send: ${EFI_PAYOUT_MIN_SEND:1.20}
+      fees:
+        includeGatewayFees: true
   card:
     client-id: ${EFI_CARD_CLIENT_ID}
     client-secret: ${EFI_CARD_CLIENT_SECRET}
     sandbox: false
     payout:
+      real-fee-percent-1x: ${EFI_CARD_REAL_FEE_PERCENT_1X:3.49}
+      real-fee-percent-2to6x: ${EFI_CARD_REAL_FEE_PERCENT_2TO6X:3.79}
+      real-fee-percent-7to12x: ${EFI_CARD_REAL_FEE_PERCENT_7TO12X:4.39}
       favored-key: ${EFI_PAYOUT_FAVORED_KEY:}
-      fee-percent: ${EFI_PAYOUT_FEE_PERCENT:1.59}
-      fee-fixed: ${EFI_PAYOUT_FEE_FIXED:0.49}
-      margin-percent: ${EFI_PAYOUT_MARGIN_PERCENT:0.8}
-      margin-fixed: ${EFI_PAYOUT_MARGIN_FIXED:0}
+      fee-percent: ${EFI_PAYOUT_CARD_FEE_PERCENT:4.39}
+      fee-fixed: ${EFI_PAYOUT_CARD_FEE_FIXED:0}
+      margin-percent: ${EFI_PAYOUT_CARD_MARGIN_PERCENT:0.5}
+      margin-fixed: ${EFI_PAYOUT_CARD_MARGIN_FIXED:0}
       min-send: ${EFI_PAYOUT_MIN_SEND:1.20}
       fees:
         includeGatewayFees: true

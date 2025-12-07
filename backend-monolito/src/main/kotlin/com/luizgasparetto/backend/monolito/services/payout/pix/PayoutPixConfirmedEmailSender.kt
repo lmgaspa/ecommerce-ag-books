@@ -1,11 +1,12 @@
 package com.luizgasparetto.backend.monolito.services.payout.pix
 
-import com.luizgasparetto.backend.monolito.config.payments.EfiPayoutProps
+import com.luizgasparetto.backend.monolito.config.payments.EfiPixPayoutProps
 import com.luizgasparetto.backend.monolito.models.payout.PayoutEmail
 import com.luizgasparetto.backend.monolito.models.payout.PayoutEmailStatus
 import com.luizgasparetto.backend.monolito.models.payout.PayoutEmailType
 import com.luizgasparetto.backend.monolito.repositories.OrderRepository
 import com.luizgasparetto.backend.monolito.repositories.PayoutEmailRepository
+import com.luizgasparetto.backend.monolito.services.email.payout.DiscountDetailsHelper
 import java.math.BigDecimal
 import java.time.OffsetDateTime
 import java.time.ZoneId
@@ -22,7 +23,7 @@ class PayoutPixConfirmedEmailSender(
         mailSender: JavaMailSender,
         orderRepository: OrderRepository,
         jdbc: NamedParameterJdbcTemplate,
-        payoutProps: EfiPayoutProps,
+        payoutProps: EfiPixPayoutProps,
         private val payoutEmailRepository: PayoutEmailRepository,
         @Value("\${email.author}") authorEmail: String,
         @Value("\${application.brand.name:Agenor Gasparetto - E-Commerce}") brandName: String,
@@ -32,7 +33,8 @@ class PayoutPixConfirmedEmailSender(
         @Value("\${application.timezone:America/Bahia}") appTz: String,
         @Value("\${efi.payout.favored-key:}") favoredKeyFromConfig: String,
         @Value("\${efi.pix.sandbox:false}") sandbox: Boolean,
-        @Value("\${mail.host:}") mailHost: String
+        @Value("\${mail.host:}") mailHost: String,
+        @Value("\${efi.pix.payout.real-fee-percent:1.19}") private val efiRealFeePercent: Double
 ) :
         PayoutPixEmailBase(
                 mailSender,
@@ -150,7 +152,7 @@ class PayoutPixConfirmedEmailSender(
         val amountGross = order?.total ?: amount
         
         // Calcula os detalhes do desconto usando o valor bruto
-        val discountDetails = calculateDiscountDetails(amountGross)
+        val discountDetails = DiscountDetailsHelper.calculateDiscountDetails(amountGross, payoutProps)
 
         val cpfFmt = formatCpfIfPossible(payeePixKey)
         val favorecidoLine =
@@ -176,7 +178,12 @@ class PayoutPixConfirmedEmailSender(
                         ?: ""
 
         val couponBlock = buildCouponBlock(orderId)
-        val discountBlock = buildDiscountDetailsBlock(discountDetails)
+        val discountBlock = DiscountDetailsHelper.buildDiscountDetailsBlock(
+            details = discountDetails,
+            payoutProps = payoutProps,
+            efiRealFeePercent = efiRealFeePercent,
+            paymentTypeLabel = "Pix"
+        )
 
         return """
         <html>

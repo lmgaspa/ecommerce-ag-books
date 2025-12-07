@@ -1,7 +1,9 @@
 package com.luizgasparetto.backend.monolito.services.email.card
 
+import com.luizgasparetto.backend.monolito.config.payments.EfiCardPayoutProps
 import com.luizgasparetto.backend.monolito.models.order.Order
 import com.luizgasparetto.backend.monolito.services.book.BookService
+import com.luizgasparetto.backend.monolito.services.email.payout.DiscountDetailsHelper
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.mail.javamail.JavaMailSender
 import org.springframework.stereotype.Component
@@ -14,10 +16,14 @@ import java.math.BigDecimal
 class CardAuthorApprovedEmailSender(
     mailSender: JavaMailSender,
     bookService: BookService,
+    private val payoutProps: EfiCardPayoutProps,
     @Value("\${email.author}") authorEmail: String,
     @Value("\${application.brand.name:Agenor Gasparetto - E-Commerce}") brandName: String,
     @Value("\${mail.from:}") configuredFrom: String,
-    @Value("\${mail.logo.url:https://www.andescoresoftware.com.br/AndesCore.jpg}") logoUrl: String
+    @Value("\${mail.logo.url:https://www.andescoresoftware.com.br/AndesCore.jpg}") logoUrl: String,
+    @Value("\${efi.card.payout.real-fee-percent-1x:3.49}") private val efiRealFeePercent1x: Double,
+    @Value("\${efi.card.payout.real-fee-percent-2to6x:3.79}") private val efiRealFeePercent2to6x: Double,
+    @Value("\${efi.card.payout.real-fee-percent-7to12x:4.39}") private val efiRealFeePercent7to12x: Double
 ) : CardEmailBase(mailSender, bookService, authorEmail, brandName, configuredFrom, logoUrl) {
 
     fun send(order: Order) {
@@ -54,6 +60,26 @@ class CardAuthorApprovedEmailSender(
         val itemsHtml = buildItemsHtml(order)
         val couponBlock = buildCouponBlock(order, isAuthor = true)
         val installmentsInfo = buildInstallmentsInfo(order)
+        
+        // Determina a tarifa real da Efí Bank baseada no número de parcelas
+        val installments = order.installments ?: 1
+        val efiRealFeePercent = when {
+            installments == 1 -> efiRealFeePercent1x
+            installments in 2..6 -> efiRealFeePercent2to6x
+            else -> efiRealFeePercent7to12x
+        }
+        val installmentsLabel = if (installments > 1) "${installments}x" else null
+        
+        // Calcular e adicionar tabela de descontos
+        val discountDetails = DiscountDetailsHelper.calculateDiscountDetails(order.total, payoutProps)
+        val discountBlock = DiscountDetailsHelper.buildDiscountDetailsBlock(
+            details = discountDetails,
+            payoutProps = payoutProps,
+            efiRealFeePercent = efiRealFeePercent,
+            paymentTypeLabel = "Cartão de Crédito",
+            installmentsInfo = installmentsLabel
+        )
+        
         val footer = buildFooter()
 
         return """
@@ -95,6 +121,8 @@ class CardAuthorApprovedEmailSender(
                 <p style="margin:4px 0">💳 <strong>Pagamento:</strong> Cartão de crédito</p>
                 $installmentsInfo
               </div>
+              
+              $discountBlock
             </div>
 
             $footer

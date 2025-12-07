@@ -99,30 +99,16 @@ abstract class CardEmailBase(
             return ""
         }
 
-        val couponCode = order.couponCode!!
-        val discountAmount = order.discountAmount!!
-        val discountFormatted = "R$ %.2f".format(discountAmount.toDouble())
-
         return if (isAuthor) {
-            """
-            <!-- CUPOM APLICADO - AUTOR -->
-            <div style="background:#fff3cd;border:1px solid #ffeaa7;border-radius:8px;padding:16px;margin:16px 0;text-align:center;">
-              <div style="color:#856404;font-size:24px;margin-bottom:8px;">🎫</div>
-              <div style="font-weight:700;color:#856404;font-size:16px;margin-bottom:4px;">CUPOM UTILIZADO</div>
-              <div style="font-weight:600;color:#856404;font-size:14px;margin-bottom:8px;">Código: ${escapeHtml(couponCode)}</div>
-              <div style="font-weight:700;color:#856404;font-size:18px;">Pagamento reduzido em $discountFormatted</div>
-            </div>
-            """.trimIndent()
+            com.luizgasparetto.backend.monolito.services.email.cupom.author.CouponBlock.build(
+                order.couponCode!!,
+                order.discountAmount!!
+            )
         } else {
-            """
-            <!-- CUPOM APLICADO - CLIENTE -->
-            <div style="background:#f8f9fa;border:1px solid #dee2e6;border-radius:8px;padding:16px;margin:16px 0;text-align:center;">
-              <div style="color:#28a745;font-size:24px;margin-bottom:8px;">🎯</div>
-              <div style="font-weight:700;color:#495057;font-size:16px;margin-bottom:4px;">CUPOM APLICADO</div>
-              <div style="font-weight:600;color:#6c757d;font-size:14px;margin-bottom:8px;">Código: ${escapeHtml(couponCode)}</div>
-              <div style="font-weight:700;color:#28a745;font-size:18px;">Você economizou $discountFormatted! 💰</div>
-            </div>
-            """.trimIndent()
+            com.luizgasparetto.backend.monolito.services.email.cupom.client.CouponBlock.build(
+                order.couponCode!!,
+                order.discountAmount!!
+            )
         }
     }
 

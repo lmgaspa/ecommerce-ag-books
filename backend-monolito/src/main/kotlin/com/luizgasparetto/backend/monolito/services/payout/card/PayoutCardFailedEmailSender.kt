@@ -1,6 +1,6 @@
 package com.luizgasparetto.backend.monolito.services.payout.card
 
-import com.luizgasparetto.backend.monolito.config.payments.EfiPayoutProps
+import com.luizgasparetto.backend.monolito.config.payments.EfiCardPayoutProps
 import com.luizgasparetto.backend.monolito.models.payout.PayoutEmailStatus
 import com.luizgasparetto.backend.monolito.models.payout.PayoutEmailType
 import com.luizgasparetto.backend.monolito.repositories.OrderRepository
@@ -22,7 +22,7 @@ class PayoutCardFailedEmailSender(
     orderRepository: OrderRepository,
     payoutEmailRepository: PayoutEmailRepository,
     jdbc: NamedParameterJdbcTemplate,
-    payoutProps: EfiPayoutProps,
+        payoutProps: EfiCardPayoutProps,
     @Value("\${email.author}") authorEmail: String,
     @Value("\${application.brand.name:Agenor Gasparetto - E-Commerce}") brandName: String,
     @Value("\${mail.from:}") configuredFrom: String,

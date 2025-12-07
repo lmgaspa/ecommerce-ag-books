@@ -1,7 +1,8 @@
 package com.luizgasparetto.backend.monolito.payments.web
 
-import com.luizgasparetto.backend.monolito.config.payments.EfiPayoutProps
+import com.luizgasparetto.backend.monolito.config.payments.EfiPixPayoutProps
 import org.slf4j.LoggerFactory
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.core.env.Environment
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate
 import org.springframework.stereotype.Service
@@ -24,9 +25,10 @@ data class PayoutResult(
 @Service
 class PaymentTriggerService(
     private val jdbc: NamedParameterJdbcTemplate,
-    private val payoutProps: EfiPayoutProps,
+    private val payoutProps: EfiPixPayoutProps,
     private val pixProvider: PixPayoutProvider,
-    private val env: Environment
+    private val env: Environment,
+    @Value("\${efi.payout.favored-key:}") private val favoredKeyFromConfig: String?
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
     private val ABS_MIN = BigDecimal("1.20") // piso líquido mínimo
@@ -324,7 +326,7 @@ class PaymentTriggerService(
 
     private fun resolveFavoredKey(overridePixKey: String?): String =
         overridePixKey?.takeIf { it.isNotBlank() }
-            ?: payoutProps.favoredKey?.takeIf { it.isNotBlank() }
+            ?: favoredKeyFromConfig?.takeIf { it.isNotBlank() }
             ?: fetchAuthorPixKey().orEmpty()
 
     private fun fetchAuthorPixKey(): String? =

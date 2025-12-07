@@ -4,7 +4,8 @@ import com.luizgasparetto.backend.monolito.config.coupon.CouponProperties
 import com.luizgasparetto.backend.monolito.config.coupon.CouponLancamentoProperties
 import com.luizgasparetto.backend.monolito.config.efi.CardEfiProperties
 import com.luizgasparetto.backend.monolito.config.efi.PixEfiProperties
-import com.luizgasparetto.backend.monolito.config.payments.EfiPayoutProps
+import com.luizgasparetto.backend.monolito.config.payments.EfiPixPayoutProps
+import com.luizgasparetto.backend.monolito.config.payments.EfiCardPayoutProps
 import com.luizgasparetto.backend.monolito.privacy.PrivacyProps
 import com.luizgasparetto.backend.monolito.bootstrap.BootstrapAuthorProperties
 import org.springframework.boot.autoconfigure.SpringBootApplication
@@ -16,7 +17,7 @@ import org.springframework.scheduling.annotation.EnableScheduling
 @SpringBootApplication
 @ConfigurationPropertiesScan
 @EnableScheduling
-@EnableConfigurationProperties(PrivacyProps::class, PixEfiProperties::class, CardEfiProperties::class, EfiPayoutProps::class, BootstrapAuthorProperties::class, CouponProperties::class, CouponLancamentoProperties::class)
+@EnableConfigurationProperties(PrivacyProps::class, PixEfiProperties::class, CardEfiProperties::class, EfiPixPayoutProps::class, EfiCardPayoutProps::class, BootstrapAuthorProperties::class, CouponProperties::class, CouponLancamentoProperties::class)
 class BackendMonolitoApplication
 
 fun main(args: Array<String>) {

@@ -1,7 +1,9 @@
 package com.luizgasparetto.backend.monolito.services.email.pix
 
+import com.luizgasparetto.backend.monolito.config.payments.EfiPixPayoutProps
 import com.luizgasparetto.backend.monolito.models.order.Order
 import com.luizgasparetto.backend.monolito.services.book.BookService
+import com.luizgasparetto.backend.monolito.services.email.payout.DiscountDetailsHelper
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.mail.javamail.JavaMailSender
 import org.springframework.stereotype.Component
@@ -14,10 +16,12 @@ import java.math.BigDecimal
 class PixAuthorEmailSender(
     mailSender: JavaMailSender,
     bookService: BookService,
+    private val payoutProps: EfiPixPayoutProps,
     @Value("\${email.author}") authorEmail: String,
     @Value("\${application.brand.name:Agenor Gasparetto - E-Commerce}") brandName: String,
     @Value("\${mail.from:}") configuredFrom: String,
-    @Value("\${mail.logo.url:https://www.andescoresoftware.com.br/AndesCore.jpg}") logoUrl: String
+    @Value("\${mail.logo.url:https://www.andescoresoftware.com.br/AndesCore.jpg}") logoUrl: String,
+    @Value("\${efi.pix.payout.real-fee-percent:1.19}") private val efiRealFeePercent: Double
 ) : PixEmailBase(mailSender, bookService, authorEmail, brandName, configuredFrom, logoUrl) {
 
     fun send(order: Order) {
@@ -57,6 +61,16 @@ class PixAuthorEmailSender(
 
         val itemsHtml = buildItemsHtml(order)
         val couponBlock = buildCouponBlock(order, isAuthor = true)
+        
+        // Calcular e adicionar tabela de descontos
+        val discountDetails = DiscountDetailsHelper.calculateDiscountDetails(order.total, payoutProps)
+        val discountBlock = DiscountDetailsHelper.buildDiscountDetailsBlock(
+            details = discountDetails,
+            payoutProps = payoutProps,
+            efiRealFeePercent = efiRealFeePercent,
+            paymentTypeLabel = "Pix"
+        )
+        
         val footer = buildFooter()
 
         return """
@@ -98,6 +112,8 @@ class PixAuthorEmailSender(
                 <p style="margin:4px 0;font-size:16px">💰 <strong>Total:</strong> $total</p>
                 <p style="margin:4px 0">💳 <strong>Pagamento:</strong> Pix</p>
               </div>
+              
+              $discountBlock
             </div>
 
             $footer

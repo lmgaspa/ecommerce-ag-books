@@ -1,6 +1,6 @@
 package com.luizgasparetto.backend.monolito.services.payout.pix
 
-import com.luizgasparetto.backend.monolito.config.payments.EfiPayoutProps
+import com.luizgasparetto.backend.monolito.config.payments.EfiPixPayoutProps
 import com.luizgasparetto.backend.monolito.models.payout.PayoutEmail
 import com.luizgasparetto.backend.monolito.models.payout.PayoutEmailStatus
 import com.luizgasparetto.backend.monolito.models.payout.PayoutEmailType
@@ -22,7 +22,7 @@ class PayoutPixFailedEmailSender(
         mailSender: JavaMailSender,
         orderRepository: OrderRepository,
         jdbc: NamedParameterJdbcTemplate,
-        payoutProps: EfiPayoutProps,
+        payoutProps: EfiPixPayoutProps,
         private val payoutEmailRepository: PayoutEmailRepository,
         @Value("\${email.author}") authorEmail: String,
         @Value("\${application.brand.name:Agenor Gasparetto - E-Commerce}") brandName: String,
