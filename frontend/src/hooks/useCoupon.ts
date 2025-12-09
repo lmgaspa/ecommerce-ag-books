@@ -1,5 +1,5 @@
 // src/hooks/useCoupon.ts
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { apiGet, apiPost } from '../api/http';
 
 interface CouponState {
@@ -49,72 +49,19 @@ export const useCoupon = () => {
     };
   }, []);
 
-  const applyCoupon = async (
-    code: string, 
-    orderTotal: number, 
-    cartItems?: Array<{ id: string; title: string; price: number; quantity: number; imageUrl: string }>
-  ): Promise<{ success: boolean; discountAmount?: number }> => {
-    if (!code.trim()) {
-      alert("Digite um código de cupom.");
-      return { success: false };
-    }
-
-    setIsValidating(true);
-
-    try {
-      const result = await apiPost<{
-        valid: boolean;
-        discountAmount?: number;
-        errorMessage?: string;
-      }>("/coupons/validate", {
-        code: code.trim(),
-        orderTotal: orderTotal,
-        userEmail: null,
-        cartItems: cartItems || null
-      });
-
-      if (result.valid) {
-        // Garantir que discountAmount seja sempre um número
-        const discountValue = result.discountAmount ?? 0;
-        const newState: CouponState = {
-          code: code.trim().toUpperCase(),
-          discount: discountValue,
-          isValid: true,
-        };
-        
-        setCouponState(newState);
-        setInputValue(code.trim().toUpperCase());
-        sessionStorage.setItem(COUPON_STORAGE_KEY, JSON.stringify(newState));
-        
-        window.dispatchEvent(new CustomEvent('couponChanged'));
-        return { success: true, discountAmount: result.discountAmount };
-      } else {
-        alert(result.errorMessage || "Cupom inválido.");
-        return { success: false };
-      }
-    } catch (error) {
-      console.error('Erro ao validar cupom via API:', error);
-      
-      // Fallback para sistema local com variáveis de ambiente
-      return applyCouponLocal(code);
-    } finally {
-      setIsValidating(false);
-    }
-  };
-
   /**
    * Normaliza código de cupom removendo acentos e convertendo para maiúsculas
    * Aceita: "lancamento", "LANCAMENTO", "lançamento", "LANÇAMENTO" -> todos viram "LANCAMENTO"
    */
-  const normalizeCouponCode = (code: string): string => {
+  const normalizeCouponCode = useCallback((code: string): string => {
     return code
       .normalize('NFD')
       .replace(/[\u0300-\u036f]/g, '')
       .toUpperCase()
       .trim();
-  };
+  }, []);
 
-  const applyCouponLocal = (code: string): { success: boolean; discountAmount?: number } => {
+  const applyCouponLocal = useCallback((code: string): { success: boolean; discountAmount?: number } => {
     const normalizedInput = normalizeCouponCode(code);
     
     // Verificar cupom genérico (BONUS)
@@ -168,20 +115,75 @@ export const useCoupon = () => {
     
     window.dispatchEvent(new CustomEvent('couponChanged'));
     return { success: true, discountAmount: fixedDiscount };
-  };
+  }, [normalizeCouponCode]);
 
-  const clearCoupon = () => {
+  const applyCoupon = useCallback(async (
+    code: string, 
+    orderTotal: number, 
+    cartItems?: Array<{ id: string; title: string; price: number; quantity: number; imageUrl: string }>
+  ): Promise<{ success: boolean; discountAmount?: number }> => {
+    if (!code.trim()) {
+      alert("Digite um código de cupom.");
+      return { success: false };
+    }
+
+    setIsValidating(true);
+
+    try {
+      const result = await apiPost<{
+        valid: boolean;
+        discountAmount?: number;
+        errorMessage?: string;
+      }>("/coupons/validate", {
+        code: code.trim(),
+        orderTotal: orderTotal,
+        userEmail: null,
+        cartItems: cartItems || null
+      });
+
+      if (result.valid) {
+        // Garantir que discountAmount seja sempre um número
+        const discountValue = result.discountAmount ?? 0;
+        const newState: CouponState = {
+          code: code.trim().toUpperCase(),
+          discount: discountValue,
+          isValid: true,
+        };
+        
+        setCouponState(newState);
+        setInputValue(code.trim().toUpperCase());
+        sessionStorage.setItem(COUPON_STORAGE_KEY, JSON.stringify(newState));
+        
+        window.dispatchEvent(new CustomEvent('couponChanged'));
+        return { success: true, discountAmount: result.discountAmount };
+      } else {
+        alert(result.errorMessage || "Cupom inválido.");
+        return { success: false };
+      }
+    } catch (error) {
+      console.error('Erro ao validar cupom via API:', error);
+      
+      // Fallback para sistema local com variáveis de ambiente
+      return applyCouponLocal(code);
+    } finally {
+      setIsValidating(false);
+    }
+  }, [applyCouponLocal]);
+
+
+
+  const clearCoupon = useCallback(() => {
     setCouponState({ code: '', discount: 0, isValid: false });
     setInputValue('');
     sessionStorage.removeItem(COUPON_STORAGE_KEY);
     window.dispatchEvent(new CustomEvent('couponChanged'));
-  };
+  }, []);
 
   /**
    * Busca informações de um cupom sem validar (opcional)
    * Útil para mostrar informações do cupom antes de aplicar
    */
-  const getCouponInfo = async (code: string): Promise<{
+  const getCouponInfo = useCallback(async (code: string): Promise<{
     exists: boolean;
     discountAmount?: number;
     description?: string;
@@ -198,9 +200,9 @@ export const useCoupon = () => {
     } catch {
       return null;
     }
-  };
+  }, []);
 
-  const getDiscountAmount = (subtotal: number): number => {
+  const getDiscountAmount = useCallback((subtotal: number): number => {
     if (!couponState.isValid) return 0;
     
     // Limitar o desconto a um valor fixo máximo (R$ 15.00)
@@ -211,7 +213,7 @@ export const useCoupon = () => {
     // E que sempre seja pelo menos 0.01 para evitar erro na Efí
     const finalDiscount = Math.min(actualDiscount, subtotal);
     return Math.max(finalDiscount, 0);
-  };
+  }, [couponState.isValid, couponState.discount]);
 
   return {
     couponCode: couponState.code,
