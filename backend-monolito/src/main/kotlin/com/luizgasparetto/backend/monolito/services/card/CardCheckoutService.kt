@@ -293,7 +293,8 @@ class CardCheckoutService(
                                 paid = false,
                                 txid = txid,
                                 items = mutableListOf(),
-                                status = OrderStatus.NEW
+                                status = OrderStatus.NEW,
+                                paymentMethod = "card"
                         )
 
                 order.items =
