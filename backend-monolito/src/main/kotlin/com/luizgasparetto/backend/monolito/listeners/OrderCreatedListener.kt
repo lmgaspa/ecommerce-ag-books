@@ -30,6 +30,21 @@ class OrderCreatedListener(
             return
         }
 
+        // CORREÇÃO: Verificar se o pedido não foi imediatamente expirado/cancelado no checkout
+        // (ex: falha ao criar cobrança no cartão -> pedido vira EXPIRED)
+        if (order.status == com.luizgasparetto.backend.monolito.models.order.OrderStatus.EXPIRED ||
+            order.status == com.luizgasparetto.backend.monolito.models.order.OrderStatus.CANCELED ||
+            order.status == com.luizgasparetto.backend.monolito.models.order.OrderStatus.ERROR ||
+            order.status == com.luizgasparetto.backend.monolito.models.order.OrderStatus.DECLINED
+        ) {
+            log.warn(
+                "OrderCreatedEvent: email ABORTADO. Pedido {} está em status terminal/falha ({})",
+                event.orderId,
+                order.status
+            )
+            return
+        }
+
         runCatching {
             orderStatusEmailService.sendPendingEmail(order)
         }.onFailure { e ->
