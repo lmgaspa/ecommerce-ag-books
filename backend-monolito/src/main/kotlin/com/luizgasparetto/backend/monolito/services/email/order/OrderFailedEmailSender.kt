@@ -80,7 +80,7 @@ class OrderFailedEmailSender(
 
         return """
         <html>
-        <body style="font-family:Arial,Helvetica,sans-serif;background:#f6f7f9;padding:24px">
+        <body style="font-family:Arial,Helvetica,sans-serif;background:#f6f7f9;padding:24px;font-size:14px">
           <div style="max-width:640px;margin:0 auto;background:#fff;border:1px solid #eee;border-radius:12px;overflow:hidden">
 
             <!-- HEADER -->
