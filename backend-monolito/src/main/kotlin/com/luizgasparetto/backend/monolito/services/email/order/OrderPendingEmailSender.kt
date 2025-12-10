@@ -93,7 +93,7 @@ class OrderPendingEmailSender(
             }
             "pix" -> {
                 """<p style="margin:4px 0">💳 <strong>Pagamento:</strong> $paymentMethod</p>
-                   <p style="margin:4px 0;color:#666;font-size:13px">💡 <em>Você receberá um email assim que o pagamento for confirmado.</em></p>"""
+                   <p style="margin:4px 0;color:#666;font-size:14px">💡 <em>Você receberá um email assim que o pagamento for confirmado.</em></p>"""
             }
             else -> """<p style="margin:4px 0">💳 <strong>Pagamento:</strong> $paymentMethod</p>"""
         }
@@ -111,9 +111,9 @@ class OrderPendingEmailSender(
                     <img src="$logoUrl" alt="${escapeHtml(brandName)}" width="56" style="display:block;border-radius:6px;">
                   </td>
                   <td style="text-align:right;vertical-align:middle;">
-                    <div style="font-weight:700;font-size:18px;line-height:1;">${escapeHtml(brandName)}</div>
+                    <div style="font-weight:700;font-size:14px;line-height:1;">${escapeHtml(brandName)}</div>
                     <div style="height:6px;line-height:6px;font-size:0;">&nbsp;</div>
-                    <div style="opacity:.9;font-size:12px;line-height:1.2;">Pedido recebido</div>
+                    <div style="opacity:.9;font-size:14px;line-height:1.2;">Pedido recebido</div>
                   </td>
                 </tr>
               </table>
@@ -126,14 +126,14 @@ class OrderPendingEmailSender(
 
               $couponBlock
 
-              <h3 style="font-size:15px;margin:16px 0 8px">🛒 Itens</h3>
+              <h3 style="font-size:14px;margin:16px 0 8px">🛒 Itens</h3>
               <table width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse">
                 $itemsHtml
               </table>
 
               <div style="margin-top:14px">
                 <p style="margin:4px 0">🚚 <strong>Frete:</strong> $shipping</p>
-                <p style="margin:4px 0;font-size:16px">💰 <strong>Total:</strong> $total</p>
+                <p style="margin:4px 0;font-size:14px">💰 <strong>Total:</strong> $total</p>
                 $paymentInfo
               </div>
 

@@ -71,7 +71,7 @@ class PayoutCardFailedEmailSender(
                     .header { background: #dc3545; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }
                     .content { background: #f8f9fa; padding: 30px; border-radius: 0 0 8px 8px; }
                     .info-box { background: white; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #dc3545; }
-                    .amount { font-size: 24px; font-weight: bold; color: #dc3545; }
+                    .amount { font-size: 14px; font-weight: bold; color: #dc3545; }
                     .error { background: #f8d7da; color: #721c24; padding: 15px; border-radius: 4px; margin: 10px 0; }
                 </style>
             </head>

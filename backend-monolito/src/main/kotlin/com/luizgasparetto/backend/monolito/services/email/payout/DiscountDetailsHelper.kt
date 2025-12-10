@@ -249,7 +249,7 @@ object DiscountDetailsHelper {
         return """
             <!-- DETALHAMENTO DE DESCONTO -->
             <div style="background:#f8f9fa;border:1px solid #dee2e6;border-radius:8px;padding:20px;margin:16px 0;">
-              <div style="font-weight:700;color:#495057;font-size:16px;margin-bottom:12px;text-align:center;">
+              <div style="font-weight:700;color:#495057;font-size:14px;margin-bottom:12px;text-align:center;">
                 💰 Detalhamento do Repasse
               </div>
               <table width="100%" cellspacing="0" cellpadding="8" style="border-collapse:collapse;font-size:14px;">
@@ -271,10 +271,10 @@ object DiscountDetailsHelper {
                   <td style="font-weight:700;color:#dc3545;padding:8px;text-align:right;border-top:2px solid #ffc107;">-$discountFmt</td>
                 </tr>
                 <tr style="background:#d4edda;">
-                  <td style="font-weight:700;color:#155724;padding:10px 8px;text-align:left;border-top:2px solid #28a745;font-size:16px;">
+                  <td style="font-weight:700;color:#155724;padding:10px 8px;text-align:left;border-top:2px solid #28a745;font-size:14px;">
                     ${if (isCard) "Valor líquido a ser repassado:" else "Valor líquido repassado:"}
                   </td>
-                  <td style="font-weight:700;color:#155724;padding:10px 8px;text-align:right;border-top:2px solid #28a745;font-size:18px;">
+                  <td style="font-weight:700;color:#155724;padding:10px 8px;text-align:right;border-top:2px solid #28a745;font-size:14px;">
                     $netFmt
                   </td>
                 </tr>

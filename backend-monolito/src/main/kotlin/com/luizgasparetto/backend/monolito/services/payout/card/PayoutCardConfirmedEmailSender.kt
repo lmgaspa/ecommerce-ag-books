@@ -96,7 +96,7 @@ class PayoutCardConfirmedEmailSender(
                     .header { background: #28a745; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }
                     .content { background: #f8f9fa; padding: 30px; border-radius: 0 0 8px 8px; }
                     .info-box { background: white; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #28a745; }
-                    .amount { font-size: 24px; font-weight: bold; color: #28a745; }
+                    .amount { font-size: 14px; font-weight: bold; color: #28a745; }
                 </style>
             </head>
             <body>

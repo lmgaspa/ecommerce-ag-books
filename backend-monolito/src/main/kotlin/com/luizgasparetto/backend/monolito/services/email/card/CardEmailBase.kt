@@ -84,7 +84,7 @@ abstract class CardEmailBase(
                     <td><img src="$img" alt="${escapeHtml(it.title)}" width="70" style="border-radius:8px;vertical-align:middle;margin-right:12px"></td>
                     <td style="padding-left:12px">
                       <div style="font-weight:600">${escapeHtml(it.title)}</div>
-                      <div style="color:#555;font-size:12px">${it.quantity}× — R$ ${"%.2f".format(it.price.toDouble())}</div>
+                      <div style="color:#555;font-size:14px">${it.quantity}× — R$ ${"%.2f".format(it.price.toDouble())}</div>
                     </td>
                   </tr>
                 </table>

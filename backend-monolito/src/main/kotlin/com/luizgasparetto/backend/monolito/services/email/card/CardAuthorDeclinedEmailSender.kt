@@ -61,9 +61,9 @@ class CardAuthorDeclinedEmailSender(
                     <img src="$logoUrl" alt="${escapeHtml(brandName)}" width="56" style="display:block;border-radius:6px;">
                   </td>
                   <td style="text-align:right;vertical-align:middle;">
-                    <div style="font-weight:700;font-size:18px;line-height:1;">${escapeHtml(brandName)}</div>
+                    <div style="font-weight:700;font-size:14px;line-height:1;">${escapeHtml(brandName)}</div>
                     <div style="height:6px;line-height:6px;font-size:0;">&nbsp;</div>
-                    <div style="opacity:.9;font-size:12px;line-height:1.2;">Pedido recusado no cartão</div>
+                    <div style="opacity:.9;font-size:14px;line-height:1.2;">Pedido recusado no cartão</div>
                   </td>
                 </tr>
               </table>
