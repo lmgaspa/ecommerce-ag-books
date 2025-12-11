@@ -15,7 +15,7 @@ import CheckoutPage from "./pages/CheckoutPage";
 import CardPaymentPage from "./pages/CardPaymentPage";
 import PixPaymentPage from "./pages/PixPaymentPage";
 import PedidoConfirmado from "./pages/PedidoConfirmado";
-import SupportPage from "./pages/SuportPage";
+import SupportPage from "./pages/SupportPage";
 import AnalyticsGate from "./components/AnalyticsGate";
 import CookieConsent from "./components/CookieConsent";
 
