@@ -65,3 +65,5 @@ env-dev.ps1
 *.sh.local
 
 src/main/resources/application-heroku.yml
+src/main/resources/application-nexapp.yml
+run-local.sh

@@ -1,17 +1,19 @@
 spring:
+  profiles:
+    active: nexapp
   flyway:
     baseline-on-migrate: true
     validate-on-migrate: false
     repair-on-migrate: true
     placeholders:
-      SITE_AUTHOR_NAME: ${SITE_AUTHOR_NAME}
-      SITE_AUTHOR_EMAIL: ${SITE_AUTHOR_EMAIL}
-      SITE_AUTHOR_PIX_KEY: ${SITE_AUTHOR_PIX_KEY}
+      SITE_AUTHOR_NAME: ${SITE_AUTHOR_NAME:}
+      SITE_AUTHOR_EMAIL: ${SITE_AUTHOR_EMAIL:}
+      SITE_AUTHOR_PIX_KEY: ${SITE_AUTHOR_PIX_KEY:}
 
   datasource:
-    url: ${JDBC_DATABASE_URL:${DATABASE_URL}}        # Heroku injeta DATABASE_URL
-    username: ${JDBC_DATABASE_USERNAME:${DB_USERNAME}}
-    password: ${JDBC_DATABASE_PASSWORD:${DB_PASSWORD}}
+    url: ${JDBC_DATABASE_URL:${DATABASE_URL:}}        # Heroku injeta DATABASE_URL
+    username: ${JDBC_DATABASE_USERNAME:${DB_USERNAME:}}
+    password: ${JDBC_DATABASE_PASSWORD:${DB_PASSWORD:}}
     driver-class-name: org.postgresql.Driver
     hikari:
       maximum-pool-size: 5
@@ -34,10 +36,10 @@ spring:
       factory: jdk
 
   mail:
-    host: ${MAIL_HOST}
-    port: ${MAIL_PORT}
-    username: ${MAIL_USERNAME}
-    password: ${MAIL_PASSWORD}
+    host: ${MAIL_HOST:}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
     properties:
       mail:
         smtp:
@@ -81,7 +83,7 @@ logging:
     jobs: com.luizgasparetto.backend.monolito.jobs,com.luizgasparetto.backend.monolito.services.pix,com.luizgasparetto.backend.monolito.services.card
 
 email:
-  author: ${EMAIL_AUTHOR}
+  author: ${EMAIL_AUTHOR:}
 
 mail:
   logo:
@@ -89,9 +91,9 @@ mail:
 
 efi:
   pix:
-    client-id: ${EFI_CLIENT_ID}
-    client-secret: ${EFI_CLIENT_SECRET}
-    chave: ${EFI_PIX_KEY}
+    client-id: ${EFI_CLIENT_ID:}
+    client-secret: ${EFI_CLIENT_SECRET:}
+    chave: ${EFI_PIX_KEY:}
     cert-path: classpath:producao-ec-agenor.p12
     cert-password: ""      # preencha se houver senha
     sandbox: false
@@ -105,8 +107,8 @@ efi:
       fees:
         includeGatewayFees: true
   card:
-    client-id: ${EFI_CARD_CLIENT_ID}
-    client-secret: ${EFI_CARD_CLIENT_SECRET}
+    client-id: ${EFI_CARD_CLIENT_ID:}
+    client-secret: ${EFI_CARD_CLIENT_SECRET:}
     sandbox: false
     payout:
       real-fee-percent-1x: ${EFI_CARD_REAL_FEE_PERCENT_1X:3.49}
@@ -145,8 +147,8 @@ checkout:
 
 app:
   privacy:
-    cookie-sign-secret: ${COOKIE_SIGN_SECRET}
-    ip-salt: ${COOKIE_IP_SALT}
+    cookie-sign-secret: ${COOKIE_SIGN_SECRET:}
+    ip-salt: ${COOKIE_IP_SALT:}
 
 bootstrap:
   author:

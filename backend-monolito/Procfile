@@ -1,1 +1,1 @@
-web: java -Dserver.port=$PORT -jar build/libs/ecommerceag-backend*.jar
+web: java -Dspring.profiles.active=nexapp -Dserver.port=${PORT:-8080} -jar ecommerceag-backend-0.0.1-SNAPSHOT.jar
